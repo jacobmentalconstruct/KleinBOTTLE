@@ -2,7 +2,7 @@
 
 - Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
 - Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
-- Generated: `2026-11-04T11:03:53`
+- Generated: `2026-11-04T11:27:33`
 - Captured files: `90`
 
 ---
@@ -9051,6 +9051,12 @@ MIT — see [LICENSE.md](LICENSE.md).
           "name": "Oak Table",
           "kind": "furniture",
           "description": "A scarred oak table."
+        },
+        {
+          "id": "phone",
+          "name": "telephone",
+          "kind": "telephone",
+          "description": "A small black telephone is on the table."
         }
       ],
       "actors": [],
@@ -9782,7 +9788,7 @@ class GameSurface(ttk.Frame):
         self.command.set("")
         self.run(command)
 
-            def run(self, command: str) -> None:
+    def run(self, command: str) -> None:
         normalized = command.strip().casefold()
         if self.session.on_phone:
             if normalized in {"hang up", "hangup"}:
@@ -9806,7 +9812,7 @@ class GameSurface(ttk.Frame):
         self._sync()
         self.entry.focus_set()
 
-            def _ask_phone(self, speech: str) -> None:
+    def _ask_phone(self, speech: str) -> None:
         call_serial, model, messages = self.session.phone_payload(speech)
         self._request_serial += 1
         serial = self._request_serial
@@ -9826,7 +9832,7 @@ class GameSurface(ttk.Frame):
         threading.Thread(target=worker, daemon=True).start()
         self.after(100, self._poll_phone)
 
-            def _poll_phone(self) -> None:
+    def _poll_phone(self) -> None:
         try:
             while True:
                 serial, call_serial, speech, reply, error = self._phone_results.get_nowait()
@@ -9842,7 +9848,7 @@ class GameSurface(ttk.Frame):
         if self._phone_busy and self.winfo_exists():
             self.after(100, self._poll_phone)
 
-            def reload_world(self) -> None:
+    def reload_world(self) -> None:
         self._request_serial += 1
         self._phone_busy = False
         try:

@@ -6,7 +6,7 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
 
 - Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
 - Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
-- Generated: `2026-11-04T10:23:23`
+- Generated: `2026-11-04T11:27:33`
 
 ```text
 [x] 📁 _KleinBOTTLE/
@@ -94,11 +94,14 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
         [x] 📄 __init__.py
         [x] 📄 app.py
         [x] 📄 game.py
+        [x] 📄 ollama_phone.py
+        [x] 📄 ui_theme.py
         [x] 📄 world_builder.py
         [x] 📄 world_model.py
         [x] 📄 world_store.py
     [x] 📁 tests/
         [x] 📄 test_game.py
+        [x] 📄 test_phone.py
         [x] 📄 test_world_builder.py
     [x] 📄 .gitignore
     [x] 📄 LICENSE.md

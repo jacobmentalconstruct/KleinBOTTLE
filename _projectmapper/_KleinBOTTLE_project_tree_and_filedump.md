@@ -12,7 +12,7 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
 
 - Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
 - Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
-- Generated: `2026-11-04T10:23:23`
+- Generated: `2026-11-04T11:27:33`
 
 ```text
 [x] 📁 _KleinBOTTLE/
@@ -100,11 +100,14 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
         [x] 📄 __init__.py
         [x] 📄 app.py
         [x] 📄 game.py
+        [x] 📄 ollama_phone.py
+        [x] 📄 ui_theme.py
         [x] 📄 world_builder.py
         [x] 📄 world_model.py
         [x] 📄 world_store.py
     [x] 📁 tests/
         [x] 📄 test_game.py
+        [x] 📄 test_phone.py
         [x] 📄 test_world_builder.py
     [x] 📄 .gitignore
     [x] 📄 LICENSE.md
@@ -119,8 +122,8 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
 
 - Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
 - Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
-- Generated: `2026-11-04T10:23:23`
-- Captured files: `87`
+- Generated: `2026-11-04T11:27:33`
+- Captured files: `90`
 
 ---
 
@@ -9168,6 +9171,12 @@ MIT — see [LICENSE.md](LICENSE.md).
           "name": "Oak Table",
           "kind": "furniture",
           "description": "A scarred oak table."
+        },
+        {
+          "id": "phone",
+          "name": "telephone",
+          "kind": "telephone",
+          "description": "A small black telephone is on the table."
         }
       ],
       "actors": [],
@@ -9247,38 +9256,91 @@ MIT — see [LICENSE.md](LICENSE.md).
       "name": "Entrance Hall",
       "area": "Old House",
       "description": "A cold draft moves beneath the front door.",
-      "exits": {"north": "study"},
+      "exits": {
+        "north": "study"
+      },
       "objects": [
-        {"id": "table", "name": "Oak Table", "kind": "furniture", "description": "A scarred oak table."}
+        {
+          "id": "table",
+          "name": "Oak Table",
+          "kind": "furniture",
+          "description": "A scarred oak table."
+        }
       ],
       "actors": [],
       "secrets": [],
-      "environment": {"weather": "rain", "light": "dim", "sound": "Rain on the roof"}
-    },
-    {
+      "environment": {
+        "weather": "rain",
+        "light": "dim",
+        "sound": "Rain on the roof"
+      }
+          },
+          {
       "id": "study",
       "name": "Study",
       "area": "Old House",
       "description": "A wardrobe stands against the northern wall.",
-      "exits": {"south": "hall", "inside": "wardrobe"},
-      "objects": [{"id": "wardrobe_object", "name": "Wardrobe", "kind": "furniture", "description": "An old wardrobe."}],
+      "exits": {
+        "south": "hall",
+        "inside": "wardrobe"
+      },
+      "objects": [
+        {
+          "id": "wardrobe_object",
+          "name": "Wardrobe",
+          "kind": "furniture",
+          "description": "An old wardrobe."
+        },
+        {
+          "id": "ringing_phone",
+          "name": "Black Telephone",
+          "kind": "telephone",
+          "description": "A black rotary telephone rings insistently on a low table.",
+          "portable": false,
+          "ringing": true,
+          "ollama": {
+            "model": "qwen2.5:3b",
+            "system": "You are a strange caller in an old house. Speak as if you are on a telephone, in brief, unsettling but friendly replies. Stay in character."
+          }
+        }
+      ],
       "actors": [],
       "secrets": [],
-      "environment": {"weather": "rain", "light": "dim", "sound": "Clock ticking"}
-    },
-    {
+      "environment": {
+        "weather": "rain",
+        "light": "dim",
+        "sound": "Clock ticking"
+      }
+          },
+          {
       "id": "wardrobe",
       "name": "Inside Wardrobe",
       "area": "Old House",
       "description": "Dark coats hang over a hidden compartment.",
-      "exits": {"outside": "study"},
-      "objects": [{"id": "key", "name": "Iron Key", "kind": "item", "description": "A small iron key."}],
+      "exits": {
+        "outside": "study"
+      },
+      "objects": [
+        {
+          "id": "key",
+          "name": "Iron Key",
+          "kind": "item",
+          "description": "A small iron key."
+        }
+      ],
       "actors": [],
-      "secrets": [{"id": "false_back", "description": "A loose wooden panel."}],
-      "environment": {"light": "dark"},
+      "secrets": [
+        {
+          "id": "false_back",
+          "description": "A loose wooden panel."
+        }
+      ],
+      "environment": {
+        "light": "dark"
+      },
       "interior_of": "study"
-    }
-  ]
+          }
+        ]
 }
 ```
 
@@ -9306,6 +9368,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from ..world_builder import WorldBuilder
 from ..world_model import ID_PATTERN, WorldValidationError, pretty
+from ..ui_theme import FONT_UI, style_dialog, style_text
 
 
 class BuilderSurface(ttk.Frame):
@@ -9341,18 +9404,18 @@ class BuilderSurface(ttk.Frame):
         body.add(nav, weight=1)
         body.add(content, weight=3)
 
-        ttk.Label(nav, text="Areas / Rooms", font=("TkDefaultFont", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        ttk.Label(nav, text="Areas / Rooms", style="Heading.TLabel").pack(anchor="w", pady=(0, 5))
         self.tree = ttk.Treeview(nav, show="tree", selectmode="browse")
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._select_room)
         controls = ttk.Frame(nav)
         controls.pack(fill="x", pady=7)
         ttk.Button(controls, text="New Room", command=self.new_room).pack(side="left", padx=2)
-        ttk.Button(controls, text="Delete", command=self.delete_room).pack(side="left", padx=2)
+        ttk.Button(controls, text="Delete", style="Danger.TButton", command=self.delete_room).pack(side="left", padx=2)
         ttk.Button(nav, text="Import / Paste JSON...", command=self.import_dialog).pack(fill="x", pady=3)
         ttk.Button(nav, text="Export World JSON...", command=self.export_world).pack(fill="x", pady=3)
 
-        ttk.Label(content, text="Room Editor", font=("TkDefaultFont", 13, "bold")).pack(anchor="w", pady=(0, 9))
+        ttk.Label(content, text="Room Editor", style="Heading.TLabel").pack(anchor="w", pady=(0, 9))
         top = ttk.Frame(content)
         top.pack(fill="x", pady=2)
         for index, (key, label, size) in enumerate((("id", "Room ID", 19), ("name", "Name", 32), ("area", "Area", 24))):
@@ -9365,9 +9428,11 @@ class BuilderSurface(ttk.Frame):
                 self.id_entry = entry
         ttk.Label(content, text="Description").pack(anchor="w", pady=(7, 2))
         self.description = tk.Text(content, height=4, wrap="word", undo=True)
+        style_text(self.description, font=FONT_UI)
         self.description.pack(fill="x")
         ttk.Label(content, text="Exits — one per line: direction:room_id").pack(anchor="w", pady=(9, 2))
         self.exits = tk.Text(content, height=4, wrap="none", undo=True)
+        style_text(self.exits)
         self.exits.pack(fill="x")
 
         environment = ttk.LabelFrame(content, text="Environment — optional text values")
@@ -9380,14 +9445,16 @@ class BuilderSurface(ttk.Frame):
 
         ttk.Label(content, text="Objects — JSON array (or use Add Object)").pack(anchor="w", pady=(8, 2))
         self.objects = tk.Text(content, height=7, wrap="none", undo=True)
+        style_text(self.objects)
         self.objects.pack(fill="both", expand=True)
         row = ttk.Frame(content)
         row.pack(fill="x", pady=(8, 3))
         ttk.Button(row, text="Add Object...", command=self.add_object).pack(side="left")
+        ttk.Button(row, text="Edit Object...", command=self.edit_object).pack(side="left", padx=8)
         ttk.Button(row, text="Full Room JSON...", command=self.edit_room_json).pack(side="left", padx=8)
-        ttk.Button(row, text="Save Room", command=self.save_room).pack(side="right")
+        ttk.Button(row, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
         self.status = tk.StringVar(value="Ready")
-        ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", pady=(8, 0))
+        ttk.Label(self, textvariable=self.status, anchor="w", style="Status.TLabel").pack(fill="x", pady=(8, 0))
 
     def _form_signature(self) -> tuple:
         return (tuple(self.vars[k].get() for k in ("id", "name", "area", "weather", "light", "sound")),
@@ -9535,36 +9602,117 @@ class BuilderSurface(ttk.Frame):
             return
         self.status.set("World settings saved")
 
+    def _object_list(self) -> list[dict]:
+        try:
+            objects = json.loads(self.objects.get("1.0", "end-1c") or "[]")
+        except json.JSONDecodeError as exc:
+            raise WorldValidationError(f"Objects JSON: {exc}") from exc
+        if not isinstance(objects, list) or not all(isinstance(item, dict) for item in objects):
+            raise WorldValidationError("Objects must be a JSON array of objects")
+        return objects
+
     def add_object(self) -> None:
+        try:
+            objects = self._object_list()
+        except WorldValidationError as exc:
+            messagebox.showerror("Objects JSON", str(exc), parent=self)
+            return
+        self._object_dialog(objects, None)
+
+    def edit_object(self) -> None:
+        try:
+            objects = self._object_list()
+        except WorldValidationError as exc:
+            messagebox.showerror("Objects JSON", str(exc), parent=self)
+            return
+        if not objects:
+            messagebox.showinfo("Edit Object", "Add an object first.", parent=self)
+            return
         window = tk.Toplevel(self)
-        window.title("Add Object")
+        style_dialog(window)
+        window.title("Select Object")
+        window.transient(self.winfo_toplevel())
+        window.resizable(False, False)
+        choices = [f"{obj.get('name', '(unnamed)')} [{obj.get('id', i)}]"
+                   for i, obj in enumerate(objects)]
+        choice = ttk.Combobox(window, state="readonly", values=choices, width=48)
+        choice.current(0)
+        ttk.Label(window, text="Choose an object to edit:").pack(anchor="w", padx=12, pady=(10, 5))
+        choice.pack(fill="x", padx=12)
+        def open_selected() -> None:
+            index = choice.current()
+            window.destroy()
+            if index >= 0:
+                self._object_dialog(objects, index)
+        ttk.Button(window, text="Edit", style="Accent.TButton", command=open_selected).pack(anchor="e", padx=12, pady=12)
+
+    def _object_dialog(self, objects: list[dict], index: int | None) -> None:
+        """Create or edit an object in the current room form; Save Room persists it."""
+        existing = objects[index] if index is not None else {}
+        window = tk.Toplevel(self)
+        style_dialog(window)
+        window.title("Edit Object" if index is not None else "Add Object")
+        window.geometry("640x560")
         window.transient(self.winfo_toplevel())
         window.grab_set()
-        window.resizable(False, False)
-        fields = {}
-        for index, (key, label) in enumerate((("id", "Object ID"), ("name", "Name"), ("kind", "Kind (item/furniture/etc)"), ("description", "Description"))):
-            ttk.Label(window, text=label).grid(row=index, column=0, padx=12, pady=7, sticky="e")
-            fields[key] = tk.StringVar()
-            ttk.Entry(window, textvariable=fields[key], width=44).grid(row=index, column=1, padx=12, pady=7)
-        fields["kind"].set("item")
+        fields: dict[str, tk.StringVar] = {}
+        for row, (key, label, default) in enumerate((
+            ("id", "Object ID", ""), ("name", "Name", ""),
+            ("kind", "Kind (use telephone for the phone)", "item"),
+            ("description", "Description", ""),
+        )):
+            ttk.Label(window, text=label).grid(row=row, column=0, padx=12, pady=7, sticky="e")
+            fields[key] = tk.StringVar(value=str(existing.get(key, default)))
+            entry = ttk.Entry(window, textvariable=fields[key], width=49)
+            entry.grid(row=row, column=1, padx=12, pady=7, sticky="ew")
+            if key == "id" and index is not None:
+                entry.configure(state="readonly")
+        phone = existing.get("ollama") if isinstance(existing.get("ollama"), dict) else {}
+        ttk.Separator(window, orient="horizontal").grid(row=4, columnspan=2, sticky="ew", padx=12, pady=(12, 6))
+        ttk.Label(window, text="Telephone / local Ollama (only used when kind = telephone)").grid(
+            row=5, columnspan=2, sticky="w", padx=12)
+        model = tk.StringVar(value=str(phone.get("model", "qwen2.5:3b")))
+        ttk.Label(window, text="Model").grid(row=6, column=0, sticky="e", padx=12, pady=7)
+        ttk.Entry(window, textvariable=model, width=49).grid(row=6, column=1, padx=12, sticky="ew")
+        ttk.Label(window, text="System prompt").grid(row=7, column=0, sticky="ne", padx=12, pady=7)
+        system = tk.Text(window, height=7, width=48, wrap="word", undo=True)
+        style_text(system, font=FONT_UI)
+        system.grid(row=7, column=1, padx=12, pady=7, sticky="nsew")
+        system.insert("1.0", str(phone.get("system", "")))
+        ringing = tk.BooleanVar(value=existing.get("ringing", True) is True)
+        ttk.Checkbutton(window, text="Ringing when the world starts", variable=ringing).grid(
+            row=8, column=1, sticky="w", padx=12, pady=6)
+        ttk.Label(window, text="Requests always use 127.0.0.1:11434; no cloud endpoint.",
+                  style="Muted.TLabel").grid(row=9, columnspan=2, sticky="w", padx=12)
+        window.grid_columnconfigure(1, weight=1)
+        window.grid_rowconfigure(7, weight=1)
 
         def save() -> None:
-            try:
-                objs = json.loads(self.objects.get("1.0", "end-1c") or "[]")
-                if not isinstance(objs, list):
-                    raise WorldValidationError("Objects must be a JSON array")
-                obj = {key: var.get().strip() for key, var in fields.items()}
-                if not ID_PATTERN.fullmatch(obj["id"]) or not obj["name"]:
-                    raise WorldValidationError("Object ID and name are required; IDs cannot contain spaces")
-                if any(isinstance(existing, dict) and existing.get("id") == obj["id"] for existing in objs):
-                    raise WorldValidationError("Object ID already exists in this room")
-                objs.append(obj)
-                self._set_text(self.objects, pretty(objs).rstrip("\n"))
-            except (ValueError, WorldValidationError) as exc:
-                messagebox.showerror("Cannot add object", str(exc), parent=window)
+            obj = deepcopy(existing)
+            for key, var in fields.items():
+                obj[key] = var.get().strip()
+            if not ID_PATTERN.fullmatch(obj["id"]) or not obj["name"]:
+                messagebox.showerror("Cannot save object", "Object ID and name are required; IDs cannot contain spaces", parent=window)
                 return
+            if any(i != index and other.get("id") == obj["id"] for i, other in enumerate(objects)):
+                messagebox.showerror("Cannot save object", "Object ID already exists in this room", parent=window)
+                return
+            if obj["kind"].casefold() == "telephone":
+                obj["ollama"] = {"model": model.get().strip() or "qwen2.5:3b",
+                                  "system": system.get("1.0", "end-1c")}
+                obj["ringing"] = ringing.get()
+                obj["portable"] = False
+            # Leave non-telephone extra properties unchanged on edit.
+            if index is None:
+                objects.append(obj)
+            else:
+                objects[index] = obj
+            self._set_text(self.objects, pretty(objects).rstrip("\n"))
+            self.status.set("Object updated in form. Click Save Room to persist it.")
             window.destroy()
-        ttk.Button(window, text="Add", command=save).grid(row=len(fields), column=1, sticky="e", padx=12, pady=10)
+
+        ttk.Button(window, text="Apply to Room", style="Accent.TButton", command=save).grid(
+            row=10, column=1, sticky="e", padx=12, pady=12)
         window.bind("<Escape>", lambda _event: window.destroy())
 
     def edit_room_json(self) -> None:
@@ -9574,10 +9722,12 @@ class BuilderSurface(ttk.Frame):
         if not self._guard_unsaved():
             return
         window = tk.Toplevel(self)
+        style_dialog(window)
         window.title(f"Room JSON — {self.selected_id}")
         window.geometry("750x610")
         window.transient(self.winfo_toplevel())
         editor = tk.Text(window, wrap="none", undo=True)
+        style_text(editor)
         editor.pack(fill="both", expand=True, padx=10, pady=10)
         self._set_text(editor, pretty(self.builder.room(self.selected_id)))
 
@@ -9592,17 +9742,19 @@ class BuilderSurface(ttk.Frame):
             self.refresh_tree(focus=room_id)
             self._populate(self.builder.room(room_id), existing=True)
             window.destroy()
-        ttk.Button(window, text="Apply JSON", command=apply).pack(anchor="e", padx=10, pady=(0, 10))
+        ttk.Button(window, text="Apply JSON", style="Accent.TButton", command=apply).pack(anchor="e", padx=10, pady=(0, 10))
 
     def import_dialog(self) -> None:
         if not self._guard_unsaved():
             return
         window = tk.Toplevel(self)
+        style_dialog(window)
         window.title("Import / Paste Rooms or World JSON")
         window.geometry("830x610")
         window.transient(self.winfo_toplevel())
         ttk.Label(window, text="Paste a room object, list of rooms, or a {rooms: [...]} world document.").pack(anchor="w", padx=10, pady=5)
         editor = tk.Text(window, wrap="none", undo=True)
+        style_text(editor)
         editor.pack(fill="both", expand=True, padx=10, pady=5)
         mode = tk.StringVar(value="add")
         options = ttk.Frame(window)
@@ -9638,7 +9790,7 @@ class BuilderSurface(ttk.Frame):
         actions = ttk.Frame(window)
         actions.pack(fill="x", padx=10, pady=10)
         ttk.Button(actions, text="Load JSON File...", command=load_file).pack(side="left")
-        ttk.Button(actions, text="Import", command=apply).pack(side="right")
+        ttk.Button(actions, text="Import", style="Accent.TButton", command=apply).pack(side="right")
 
     def export_world(self) -> None:
         path = filedialog.asksaveasfilename(parent=self, defaultextension=".json", filetypes=[("JSON", "*.json")],
@@ -9661,9 +9813,13 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import messagebox, ttk
+import queue
+import threading
 
 from ..game import GameSession
+from ..ollama_phone import OllamaPhoneError, chat
 from ..world_model import WorldValidationError
+from ..ui_theme import ACCENT, FONT_HEADING, FONT_STORY, style_text
 
 
 class GameSurface(ttk.Frame):
@@ -9673,13 +9829,16 @@ class GameSurface(ttk.Frame):
         self.command = tk.StringVar()
         self.location = tk.StringVar()
         self.inventory = tk.StringVar()
+        self._phone_results: queue.Queue = queue.Queue()
+        self._phone_busy = False
+        self._request_serial = 0
         self._build()
         self._render_initial()
 
     def _build(self) -> None:
         top = ttk.Frame(self)
         top.pack(fill="x", pady=(0, 8))
-        ttk.Label(top, text="Play", font=("TkDefaultFont", 14, "bold")).pack(side="left")
+        ttk.Label(top, text="Play", style="Heading.TLabel").pack(side="left")
         ttk.Button(top, text="Reload World / Restart", command=self.reload_world).pack(side="right")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True)
@@ -9690,32 +9849,33 @@ class GameSurface(ttk.Frame):
 
         story = ttk.Frame(main)
         story.pack(fill="both", expand=True)
-        self.transcript = tk.Text(story, wrap="word", state="disabled", font=("TkDefaultFont", 11),
+        self.transcript = tk.Text(story, wrap="word", state="disabled",
                                   padx=10, pady=10, spacing3=6)
+        style_text(self.transcript, font=FONT_STORY)
         self.transcript.pack(side="left", fill="both", expand=True)
         scrollbar = ttk.Scrollbar(story, orient="vertical", command=self.transcript.yview)
         scrollbar.pack(side="right", fill="y")
         self.transcript.configure(yscrollcommand=scrollbar.set)
-        self.transcript.tag_configure("command", foreground="#4067A4", spacing1=10)
-        self.transcript.tag_configure("title", font=("TkDefaultFont", 11, "bold"))
+        self.transcript.tag_configure("command", foreground=ACCENT, spacing1=10)
+        self.transcript.tag_configure("title", font=FONT_HEADING)
         cmd_row = ttk.Frame(main)
         cmd_row.pack(fill="x", pady=(10, 0))
         ttk.Label(cmd_row, text="Command:").pack(side="left", padx=(0, 5))
         self.entry = ttk.Entry(cmd_row, textvariable=self.command)
         self.entry.pack(side="left", fill="x", expand=True)
         self.entry.bind("<Return>", self._submit)
-        ttk.Button(cmd_row, text="Run", command=self._submit).pack(side="left", padx=(5, 0))
+        ttk.Button(cmd_row, text="Run", style="Accent.TButton", command=self._submit).pack(side="left", padx=(5, 0))
         quick = ttk.Frame(main)
         quick.pack(fill="x", pady=(8, 0))
         for caption, command in (("Look", "look"), ("Inventory", "inventory"), ("Help", "help")):
             ttk.Button(quick, text=caption, command=lambda c=command: self.run(c)).pack(side="left", padx=(0, 6))
 
-        ttk.Label(sidebar, text="Location", font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(sidebar, text="Location", style="Heading.TLabel").pack(anchor="w")
         ttk.Label(sidebar, textvariable=self.location, wraplength=195, justify="left").pack(anchor="w", pady=(4, 16))
-        ttk.Label(sidebar, text="Exits", font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(sidebar, text="Exits", style="Heading.TLabel").pack(anchor="w")
         self.exit_frame = ttk.Frame(sidebar)
         self.exit_frame.pack(fill="x", pady=(4, 16))
-        ttk.Label(sidebar, text="Inventory", font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(sidebar, text="Inventory", style="Heading.TLabel").pack(anchor="w")
         ttk.Label(sidebar, textvariable=self.inventory, wraplength=195, justify="left").pack(anchor="w", pady=(4, 0))
 
     def _append(self, message: str, tag: str | None = None) -> None:
@@ -9749,12 +9909,68 @@ class GameSurface(ttk.Frame):
         self.run(command)
 
     def run(self, command: str) -> None:
-        self._append("> " + command, "command")
-        self._append(self.session.execute(command))
+        normalized = command.strip().casefold()
+        if self.session.on_phone:
+            if normalized in {"hang up", "hangup"}:
+                self._request_serial += 1  # abandon any pending model response
+                self._phone_busy = False
+                self._append("> " + command, "command")
+                self._append(self.session.execute(command))
+            elif self._phone_busy:
+                self._append("The voice is still responding. You can 'hang up'.")
+            else:
+                speech = command[4:].strip() if normalized.startswith("say ") else command.strip()
+                if speech:
+                    self._append("> " + speech, "command")
+                    self._ask_phone(speech)
+        else:
+            self._append("> " + command, "command")
+            self._append(self.session.execute(command))
+            if self.session.on_phone:
+                self._append("> Hello?", "command")
+                self._ask_phone("Hello?")
         self._sync()
         self.entry.focus_set()
 
+    def _ask_phone(self, speech: str) -> None:
+        call_serial, model, messages = self.session.phone_payload(speech)
+        self._request_serial += 1
+        serial = self._request_serial
+        self._phone_busy = True
+        self._append(f"[Calling local Ollama: {model} ...]")
+
+        def worker() -> None:
+            try:
+                reply = chat(model, messages)
+                self._phone_results.put((serial, call_serial, speech, reply, None))
+            except OllamaPhoneError as exc:
+                self._phone_results.put((serial, call_serial, speech, None, str(exc)))
+            except Exception as exc:
+                self._phone_results.put((serial, call_serial, speech, None,
+                                         f"Local Ollama request failed: {type(exc).__name__}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.after(100, self._poll_phone)
+
+    def _poll_phone(self) -> None:
+        try:
+            while True:
+                serial, call_serial, speech, reply, error = self._phone_results.get_nowait()
+                if serial != self._request_serial or not self.session.on_phone:
+                    continue
+                self._phone_busy = False
+                if error:
+                    self._append(f"[Telephone offline] {error}")
+                elif self.session.finish_phone_reply(call_serial, speech, reply):
+                    self._append("Voice: " + reply)
+        except queue.Empty:
+            pass
+        if self._phone_busy and self.winfo_exists():
+            self.after(100, self._poll_phone)
+
     def reload_world(self) -> None:
+        self._request_serial += 1
+        self._phone_busy = False
         try:
             first_description = self.session.restart()
         except (WorldValidationError, OSError) as exc:
@@ -9792,10 +10008,12 @@ from .world_builder import WorldBuilder
 from .world_store import WorldStore
 from .surfaces.builder import BuilderSurface
 from .surfaces.game import GameSurface
+from .ui_theme import apply_theme
 
 
 def main() -> None:
     root = tk.Tk()
+    apply_theme(root)
     root.title("Adventure — World Builder & Play")
     root.geometry("1160x760")
     world_file = Path(__file__).resolve().parents[1] / "data" / "world.json"
@@ -9835,6 +10053,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from .world_store import WorldStore
+from .ollama_phone import DEFAULT_MODEL
+
+DEFAULT_PHONE_PROMPT = (
+    "You are a mysterious voice reached by telephone in a text adventure. "
+    "Stay in character. Respond conversationally and briefly (1-3 sentences). "
+    "You only speak through the telephone; do not narrate player actions."
+)
 
 
 @dataclass(frozen=True)
@@ -9874,12 +10099,18 @@ class GameSession:
         self.world: dict = {}
         self.room_id: str | None = None
         self.inventory: list[dict] = []
+        self.phone: dict | None = None
+        self.phone_history: list[dict] = []
+        self.call_serial = 0
         self.restart()
 
     def restart(self) -> str:
         """Reload the editor's saved world and begin a fresh play session."""
         self.world = deepcopy(self.store.load())
         self.inventory = []
+        self.phone = None
+        self.phone_history = []
+        self.call_serial += 1  # invalidate any in-flight replies after restart
         rooms = self.world["rooms"]
         self.room_id = self.world["start_room"] or (rooms[0]["id"] if rooms else None)
         return self.look()
@@ -9911,6 +10142,9 @@ class GameSession:
         objects = [obj for obj in room.get("objects", []) if not obj.get("hidden", False)]
         if objects:
             lines.append("You see: " + ", ".join(_name(obj) for obj in objects) + ".")
+        if any(str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing")
+               for obj in objects):
+            lines.append("A telephone rings relentlessly. You could 'answer phone'.")
         actors = [actor for actor in room.get("actors", []) if not actor.get("hidden", False)]
         if actors:
             lines.append("Present: " + ", ".join(_name(actor) for actor in actors) + ".")
@@ -9954,7 +10188,10 @@ class GameSession:
             return ambiguity
         if obj is None:
             return f"You don't see '{query}' here."
-        return f"{_name(obj)}\n{obj.get('description') or 'Nothing unusual stands out.'}"
+        description = f"{_name(obj)}\n{obj.get('description') or 'Nothing unusual stands out.'}"
+        if str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing"):
+            description += "\nIt keeps ringing. Try 'answer phone'."
+        return description
 
     @staticmethod
     def _portable(obj: dict) -> bool:
@@ -9997,6 +10234,67 @@ class GameSession:
     def inventory_text(self) -> str:
         return "You're carrying: " + ", ".join(_name(obj) for obj in self.inventory) + "." if self.inventory else "Your inventory is empty."
 
+    @property
+    def on_phone(self) -> bool:
+        return self.phone is not None
+
+    def answer_phone(self, query: str = "phone") -> str:
+        if self.on_phone:
+            return "You're already on the telephone. Type 'hang up' to end the call."
+        room = self._room()
+        if room is None:
+            return self.look()
+        phones = [obj for obj in room.get("objects", [])
+                  if not obj.get("hidden", False) and
+                  str(obj.get("kind", "")).casefold() == "telephone"]
+        if not phones:
+            return "There is no telephone here."
+        if query.casefold().strip() in {"", "phone", "telephone", "receiver"}:
+            if len(phones) != 1:
+                return "Which telephone? " + ", ".join(_name(obj) for obj in phones)
+            obj = phones[0]
+        else:
+            obj, ambiguity = _find(phones, query)
+            if ambiguity:
+                return ambiguity
+            if obj is None:
+                return f"No telephone named '{query}' is here."
+        self.phone = obj
+        self.phone_history = []
+        self.call_serial += 1
+        obj["ringing"] = False  # in-memory only; builder's world never changes
+        return f"You pick up {_name(obj)}. The ringing stops. A line clicks open..."
+
+    def hang_up(self) -> str:
+        if not self.on_phone:
+            return "You're not on a call."
+        self.phone = None
+        self.phone_history = []
+        self.call_serial += 1
+        return "You hang up the receiver."
+
+    def phone_payload(self, speech: str) -> tuple[int, str, list[dict]]:
+        """Prepare one local inference request; commits only after a successful reply."""
+        if self.phone is None:
+            raise ValueError("No active phone call")
+        settings = self.phone.get("ollama")
+        settings = settings if isinstance(settings, dict) else {}
+        model = settings.get("model") or DEFAULT_MODEL
+        system = settings.get("system") or DEFAULT_PHONE_PROMPT
+        # Keep a small, bounded history for the 3B model.
+        history = self.phone_history[-12:]
+        messages = [{"role": "system", "content": str(system)}, *history,
+                    {"role": "user", "content": speech}]
+        return self.call_serial, model, messages
+
+    def finish_phone_reply(self, serial: int, speech: str, reply: str) -> bool:
+        """Ignore late model responses after hangup or world reload."""
+        if not self.on_phone or self.call_serial != serial:
+            return False
+        self.phone_history.extend(({"role": "user", "content": speech},
+                                   {"role": "assistant", "content": reply}))
+        return True
+
     def execute(self, raw: str) -> str:
         command = raw.strip()
         if not command:
@@ -10004,6 +10302,14 @@ class GameSession:
         verb, _, arg = command.partition(" ")
         verb, arg = verb.casefold(), arg.strip()
         room = self._room()
+        if command.casefold() in {"hang up", "hangup"}:
+            return self.hang_up()
+        if self.on_phone:
+            return "You're on the telephone. Say something or 'hang up'."
+        if verb == "answer":
+            return self.answer_phone(arg)
+        if command.casefold() in {"pick up phone", "pick up telephone", "pick up receiver"}:
+            return self.answer_phone()
         if verb in {"help", "?"}:
             return ("Commands:\n"
                     "  look (l) — describe current room\n"
@@ -10013,6 +10319,8 @@ class GameSession:
                     "  take <item> (get, pick up)\n"
                     "  drop <item>\n"
                     "  inventory (i, inv)\n"
+                    "  answer phone — local Ollama conversation\n"
+                    "  hang up — end telephone call\n"
                     "  help (?)\n"
                     "  Reload World — restart from the builder's saved JSON")
         if verb in {"l", "look"} and not arg:
@@ -10040,6 +10348,178 @@ class GameSession:
         if room and any(key.casefold() == command.casefold() for key in room["exits"]):
             return self.move(command)
         return f"Unknown command: {command}. Type 'help' for commands."
+```
+
+---
+
+## FILE: `src/ollama_phone.py`
+
+```python
+"""One local Ollama chat request for the adventure telephone. Standard library only.
+
+The endpoint is deliberately fixed to loopback; world JSON can select a model,
+but cannot redirect requests to an external provider or remote host.
+"""
+from __future__ import annotations
+
+import http.client
+import json
+import re
+
+HOST = "127.0.0.1"
+PORT = 11434
+DEFAULT_MODEL = "qwen2.5:3b"
+_MODEL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$")
+
+
+class OllamaPhoneError(RuntimeError):
+    """A local model request failed or returned unusable data."""
+
+
+def chat(model: str, messages: list[dict]) -> str:
+    """Call only local Ollama's /api/chat (non-streaming), never a cloud URL."""
+    if not isinstance(model, str) or not _MODEL_NAME.fullmatch(model):
+        raise OllamaPhoneError("Invalid local Ollama model name.")
+    body = json.dumps({"model": model, "messages": messages,
+                       "stream": False, "options": {"num_predict": 160}}).encode("utf-8")
+    connection = http.client.HTTPConnection(HOST, PORT, timeout=60)
+    try:
+        connection.request("POST", "/api/chat", body=body,
+                           headers={"Content-Type": "application/json"})
+        response = connection.getresponse()
+        data = response.read(2_000_001)
+        if len(data) > 2_000_000:
+            raise OllamaPhoneError("Ollama response was too large.")
+        if response.status != 200:
+            if response.status == 404:
+                raise OllamaPhoneError(f"Model '{model}' unavailable locally. Run: ollama pull {model}")
+            raise OllamaPhoneError(f"Local Ollama returned HTTP {response.status}.")
+        result = json.loads(data.decode("utf-8"))
+        content = result.get("message", {}).get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise OllamaPhoneError("Local Ollama returned an empty reply.")
+        return content.strip()
+    except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        raise OllamaPhoneError(
+            "Cannot reach local Ollama (127.0.0.1:11434). Start Ollama and check the model."
+        ) from exc
+    except (ValueError, UnicodeError, TypeError, AttributeError) as exc:
+        raise OllamaPhoneError("Local Ollama returned an invalid chat response.") from exc
+    finally:
+        connection.close()
+```
+
+---
+
+## FILE: `src/ui_theme.py`
+
+```python
+"""Midnight Blue Tk/ttk presentation for KleinBOTTLE.
+
+This module is a local copy of theme values, not a dependency on development
+sidecars. Widgets keep their existing behavior; only their presentation changes.
+"""
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import ttk
+
+BACKGROUND = "#1e1e2f"
+INSET = "#151521"
+SURFACE = "#2a2a3f"
+ACCENT = "#007ACC"
+TEXT = "#E7EDF4"
+MUTED = "#97A4B3"
+STATUS = "#00FF00"
+DANGER = "#C23621"
+BORDER = "#333333"
+
+FONT_UI = ("Segoe UI", 9)
+FONT_HEADING = ("Segoe UI", 10, "bold")
+FONT_MONO = ("Consolas", 9)
+FONT_STORY = ("Segoe UI", 10)
+
+
+def apply_theme(root: tk.Tk) -> None:
+    """Set the single application-wide ttk style before creating either surface."""
+    root.configure(bg=BACKGROUND)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+
+    style.configure(".", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
+    style.configure("TFrame", background=BACKGROUND)
+    style.configure("TLabel", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
+    style.configure("Heading.TLabel", font=FONT_HEADING)
+    style.configure("Muted.TLabel", foreground=MUTED)
+    style.configure("Status.TLabel", foreground=STATUS)
+
+    style.configure("TButton", background=SURFACE, foreground=TEXT,
+                    bordercolor=BORDER, borderwidth=1, relief="flat", padding=(10, 5))
+    style.map("TButton",
+              background=[("pressed", ACCENT), ("active", ACCENT)],
+              foreground=[("disabled", MUTED), ("active", "#FFFFFF")])
+    style.configure("Accent.TButton", background=ACCENT, foreground="#FFFFFF")
+    style.map("Accent.TButton",
+              background=[("pressed", "#0065a8"), ("active", "#178cdb")],
+              foreground=[("disabled", MUTED), ("active", "#FFFFFF")])
+    style.configure("Danger.TButton", background=DANGER, foreground="#FFFFFF")
+    style.map("Danger.TButton",
+              background=[("pressed", "#8c291b"), ("active", "#a52d1c")],
+              foreground=[("disabled", MUTED), ("active", "#FFFFFF")])
+
+    style.configure("TEntry", fieldbackground=INSET, foreground=TEXT,
+                    bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER, padding=5)
+    style.map("TEntry", fieldbackground=[("readonly", SURFACE), ("disabled", SURFACE)],
+              foreground=[("disabled", MUTED)])
+    style.configure("TCombobox", fieldbackground=INSET, foreground=TEXT,
+                    background=SURFACE, arrowcolor=TEXT, bordercolor=BORDER, padding=4,
+                    selectbackground=ACCENT, selectforeground="#FFFFFF")
+    style.map("TCombobox",
+              fieldbackground=[("readonly", INSET), ("disabled", SURFACE)],
+              foreground=[("readonly", TEXT), ("disabled", MUTED)],
+              selectbackground=[("readonly", ACCENT)],
+              selectforeground=[("readonly", "#FFFFFF")])
+    root.option_add("*TCombobox*Listbox.background", INSET)
+    root.option_add("*TCombobox*Listbox.foreground", TEXT)
+    root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
+    root.option_add("*TCombobox*Listbox.selectForeground", "#FFFFFF")
+
+    style.configure("TNotebook", background=BACKGROUND, borderwidth=0)
+    style.configure("TNotebook.Tab", background=SURFACE, foreground=MUTED,
+                    padding=(14, 8), borderwidth=0)
+    style.map("TNotebook.Tab",
+              background=[("selected", BACKGROUND), ("active", ACCENT)],
+              foreground=[("selected", TEXT), ("active", "#FFFFFF")])
+    style.configure("Treeview", background=INSET, fieldbackground=INSET,
+                    foreground=TEXT, rowheight=25, bordercolor=BORDER,
+                    borderwidth=0, font=FONT_UI)
+    style.map("Treeview", background=[("selected", ACCENT)],
+              foreground=[("selected", "#FFFFFF")])
+    style.configure("TLabelFrame", background=BACKGROUND, bordercolor=BORDER)
+    style.configure("TLabelFrame.Label", background=BACKGROUND,
+                    foreground=TEXT, font=FONT_HEADING)
+    style.configure("TRadiobutton", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
+    style.map("TRadiobutton", foreground=[("disabled", MUTED)])
+    style.configure("TCheckbutton", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
+    style.map("TCheckbutton", foreground=[("disabled", MUTED)],
+              background=[("active", BACKGROUND)])
+    style.configure("TPanedwindow", background=BACKGROUND)
+    style.configure("TScrollbar", background=SURFACE, troughcolor=INSET,
+                    arrowcolor=TEXT, bordercolor=BORDER)
+    style.map("TScrollbar", background=[("active", ACCENT)])
+
+
+def style_text(widget: tk.Text, *, font: tuple = FONT_MONO) -> None:
+    """ttk styles do not affect classic tk.Text widgets; style them explicitly."""
+    widget.configure(bg=INSET, fg=TEXT, insertbackground=TEXT,
+                     selectbackground=ACCENT, selectforeground="#FFFFFF",
+                     highlightthickness=1, highlightbackground=BORDER,
+                     highlightcolor=ACCENT, relief="flat", font=font)
+
+
+def style_dialog(window: tk.Toplevel) -> None:
+    """Ensure classic Tk dialog backgrounds match the ttk theme."""
+    window.configure(bg=BACKGROUND)
 ```
 
 ---
@@ -10449,6 +10929,92 @@ if __name__ == "__main__":
 
 ---
 
+## FILE: `tests/test_phone.py`
+
+```python
+"""Telephone lifecycle and local transport, without a running Ollama service."""
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch, MagicMock
+import json
+
+from src.game import GameSession
+from src.ollama_phone import chat, OllamaPhoneError
+from src.world_builder import WorldBuilder
+from src.world_store import WorldStore
+
+
+class PhoneTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        store = WorldStore(Path(self.tmp.name) / "world.json")
+        builder = WorldBuilder(store)
+        builder.import_json((Path(__file__).resolve().parents[1] / "examples" / "rooms.json").read_text("utf-8"), mode="replace")
+        self.original = store.path.read_bytes()
+        self.game = GameSession(store)
+        self.store = store
+
+    def test_phone_visible_and_answers(self):
+        self.assertIn("no telephone", self.game.execute("answer phone"))
+        self.game.execute("north")
+        self.assertIn("rings relentlessly", self.game.look())
+        self.assertIn("The ringing stops", self.game.execute("answer phone"))
+        self.assertTrue(self.game.on_phone)
+        self.assertNotIn("rings relentlessly", self.game.look())
+        serial, model, messages = self.game.phone_payload("Hello?")
+        self.assertEqual(model, "qwen2.5:3b")
+        self.assertEqual(messages[-1], {"role":"user","content":"Hello?"})
+        self.assertTrue(self.game.finish_phone_reply(serial, "Hello?", "Who is this?"))
+        self.assertEqual(self.game.phone_payload("Hello again")[2][-2]["content"], "Who is this?")
+        self.assertIn("hang up", self.game.execute("hang up"))
+        self.assertFalse(self.game.on_phone)
+        self.assertFalse(self.game.finish_phone_reply(serial, "Hello?", "late reply"))
+        self.assertEqual(self.store.path.read_bytes(), self.original)
+
+    def test_world_reload_cancels_in_flight_reply(self):
+        self.game.execute("north")
+        self.game.execute("answer phone")
+        serial, _, _ = self.game.phone_payload("Hello")
+        self.game.restart()
+        self.assertFalse(self.game.finish_phone_reply(serial,"Hello","Reply"))
+        self.game.execute("north")
+        self.assertIn("rings relentlessly",self.game.look())
+
+    @patch("src.ollama_phone.http.client.HTTPConnection")
+    def test_ollama_requests_only_loopback(self, fake):
+        instance = fake.return_value
+        response = instance.getresponse.return_value
+        response.status = 200
+        response.read.return_value = json.dumps({"message":{"role":"assistant","content":"Hello, caller."}}).encode()
+        self.assertEqual(chat("qwen2.5:3b",[{"role":"user","content":"Hello"}]), "Hello, caller.")
+        fake.assert_called_once_with("127.0.0.1",11434,timeout=60)
+        args,kwargs = instance.request.call_args
+        self.assertEqual(args[:2],("POST","/api/chat"))
+        body = json.loads(kwargs["body"])
+        self.assertEqual(body["model"],"qwen2.5:3b")
+        self.assertFalse(body["stream"])
+
+    @patch("src.ollama_phone.http.client.HTTPConnection")
+    def test_offline_ollama_failure(self, fake):
+        fake.return_value.request.side_effect = ConnectionRefusedError()
+        with self.assertRaisesRegex(OllamaPhoneError,"Cannot reach local Ollama"):
+            chat("qwen2.5:3b",[])
+
+    @patch("src.ollama_phone.http.client.HTTPConnection")
+    def test_missing_local_model(self, fake):
+        fake.return_value.getresponse.return_value.status = 404
+        fake.return_value.getresponse.return_value.read.return_value = b'{}'
+        with self.assertRaisesRegex(OllamaPhoneError,"ollama pull"):
+            chat("qwen2.5:3b",[])
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+---
+
 ## FILE: `tests/test_world_builder.py`
 
 ```python
@@ -10658,6 +11224,28 @@ Import accepts an individual room, list of rooms, or a world document containing
 Room IDs cannot be renamed through the form (to protect exit references). Deleting a referenced room is blocked. Unresolved exits generate editor warnings and, in Play, a friendly missing-room message.
 
 ## Architecture
+
+
+## Telephone / local Ollama (optional)
+
+Install Ollama on the same computer and run `ollama pull qwen2.5:3b`.
+Ollama must be running at `127.0.0.1:11434`. No cloud service or API key is used.
+
+In the World Builder, open a room, choose **Add Object** or **Edit Object**,
+set **Kind** to `telephone`, and set its local **Model**, **System prompt**, and
+**Ringing** checkbox. Click **Apply to Room**, then **Save Room**. The model
+and persona are stored inside that object's JSON as `ollama.model` and
+`ollama.system`. The phone does not depend on either development sidecar.
+
+In Play, type `answer phone` while in the room. A `Hello?` starts the call;
+type natural dialogue (or `say hello`) until `hang up`. Each call keeps its
+own brief in-memory conversation; no call logs are saved to world JSON.
+The interface remains responsive during inference and an Ollama failure
+shows an offline message rather than breaking the game.
+
+The example world contains a ringing phone in the Study. This patch intentionally
+does not change `data/world.json`: bring your own phone into any room using
+the object editor.
 
 ```text
 src/app.py                    thin app shell; Tk root and two surface tabs
