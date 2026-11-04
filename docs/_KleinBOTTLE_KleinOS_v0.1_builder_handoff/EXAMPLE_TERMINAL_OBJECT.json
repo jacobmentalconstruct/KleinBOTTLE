@@ -1,0 +1,10 @@
+{
+  "id": "computer_01",
+  "name": "Old Computer",
+  "kind": "terminal",
+  "description": "A dusty terminal flickers. You can 'use computer'.",
+  "portable": false,
+  "terminal": {
+    "sandbox": "default"
+  }
+}

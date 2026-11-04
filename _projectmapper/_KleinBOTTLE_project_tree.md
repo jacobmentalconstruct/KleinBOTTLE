@@ -6,7 +6,7 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
 
 - Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
 - Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
-- Generated: `2026-11-04T11:27:33`
+- Generated: `2026-11-04T11:29:06`
 
 ```text
 [x] 📁 _KleinBOTTLE/
@@ -84,6 +84,12 @@ The SQLite snapshot remains the authoritative truth source for the manifest, sel
     [x] 📁 data/
         [x] 📄 raithetopia.json
         [x] 📄 world.json
+    [x] 📁 docs/
+        [x] 📁 _KleinBOTTLE_KleinOS_v0.1_builder_handoff/
+            [x] 📄 BUILDER_PROMPT.md
+            [x] 📄 EXAMPLE_TERMINAL_OBJECT.json
+            [x] 📄 README.md
+            [x] 📄 TASK_PLAN.json
     [x] 📁 examples/
         [x] 📄 rooms.json
     [x] 📁 src/

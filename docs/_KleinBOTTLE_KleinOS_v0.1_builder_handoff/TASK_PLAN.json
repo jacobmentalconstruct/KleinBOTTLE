@@ -1,0 +1,230 @@
+{
+  "project": "_KleinBOTTLE",
+  "tranche": "KleinOS v0.1 — one sandboxed in-world computer",
+  "objective": "A player uses one computer object to open a Tkinter desktop with Files, Terminal, and Editor backed by one persistent, restricted Linux Docker container.",
+  "workflow": "Baseline -> Container -> Backend -> Desktop -> Integrate -> Verify -> Park",
+  "status": "planned",
+  "filesystem_budget": {
+    "new": [
+      "Dockerfile.kleinos",
+      "src/computer_backend.py",
+      "src/surfaces/computer.py",
+      "tests/test_computer.py"
+    ],
+    "modify": [
+      "src/game.py",
+      "src/surfaces/game.py"
+    ],
+    "modify_only_if_needed": [
+      "src/app.py",
+      "README.md"
+    ],
+    "preserve": [
+      "data/world.json",
+      "data/raithetopia.json",
+      "_spine/",
+      ".project-mapper/",
+      ".microservice-library/",
+      "src/ollama_phone.py"
+    ],
+    "note": "If a genuine technical necessity requires another file, explain before expanding the footprint. Never rename either game.py in this tranche."
+  },
+  "architecture": {
+    "trusted_layer": "KleinBOTTLE game process -> computer_backend.py -> Docker CLI (argv only, shell=False)",
+    "untrusted_layer": "One non-root, offline, resource-limited Linux container with a single persistent named volume mounted at /workspace.",
+    "interface": "One Tkinter Toplevel computer window with 3 views; return to Play without changing Notebook tabs.",
+    "world": "GameSession identifies one visible kind=terminal object. World object metadata never controls arbitrary Docker image, mounts, executable, or container identity.",
+    "storage": "Files, Terminal, and Editor operate on the same container /workspace; never treat a local host path as a fallback.",
+    "later_not_now": "JSON room import/publish via existing WorldBuilder validation and explicit user approval."
+  },
+  "hard_constraints": [
+    "One computer and one sandbox. Do not build a general virtual-machine manager, OS, plugin framework, shell emulator, or agent.",
+    "No host bind mounts, network access, Docker socket inside the container, privileged mode, host PID namespace, or broad Linux capabilities.",
+    "Use non-root container user, read-only root filesystem, writable named /workspace volume, small /tmp tmpfs, no-new-privileges, cap-drop ALL, and CPU/memory/PID limits.",
+    "All submitted commands execute in container. No host-shell fallback and no shell=True in Python subprocess calls.",
+    "Treat in-game world JSON and terminal commands as untrusted data; use fixed Docker runtime configuration; validate all file paths against /workspace within the container, including symlinks.",
+    "Cap output, enforce command timeouts (including container-side termination), and do not block Tkinter's event loop.",
+    "Never modify live world files from terminal. Room publishing is a later tranche, via trusted WorldBuilder import only.",
+    "Preserve phone, game engine behavior, saved worlds, and development sidecars; do not change world data during install.",
+    "Avoid the previous ProjectMapper indentation failure: stage modifications, validate syntax/AST on proposed files before writing, use literal indentation for Python replacements, and test after every step.",
+    "If Docker is unavailable, show a clear error; do not silently execute on the host."
+  ],
+  "tasks": [
+    {
+      "id": "K0",
+      "name": "Verify and back up baseline",
+      "start_conditions": [
+        "Work from the user's current local _KleinBOTTLE directory, not an older filedump."
+      ],
+      "steps": [
+        "Back up the working project.",
+        "Check Docker CLI/daemon availability; do not change system configuration automatically.",
+        "Run Python syntax checks and existing tests; record results and current modified files."
+      ],
+      "target_end_state": "Known-good source snapshot and exact baseline test results, ready for Docker setup.",
+      "verification": [
+        "python -m compileall -q src tests",
+        "python -m unittest discover -s tests -v"
+      ],
+      "constraints": [
+        "No source edits in this task.",
+        "If baseline is broken, repair/stop before adding functionality."
+      ]
+    },
+    {
+      "id": "K1",
+      "name": "Build isolated container",
+      "start_conditions": [
+        "K0 baseline passes or known preexisting issues are explicitly documented.",
+        "Docker Desktop + WSL2 Linux containers are running."
+      ],
+      "steps": [
+        "Create Dockerfile.kleinos using a small pinned Python/Linux base image, a non-root user, and /workspace.",
+        "Create one deterministic container and one persistent named volume; implement startup flags in trusted backend in K2 rather than introducing scripts.",
+        "Apply --network none, --read-only, --cap-drop ALL, --security-opt no-new-privileges, --pids-limit, --memory, --cpus, writable volume /workspace, bounded /tmp tmpfs.",
+        "Prove a file survives container stop/start and that host paths are not mounted."
+      ],
+      "target_end_state": "A restricted container can execute Python and persist /workspace independently of the GUI.",
+      "verification": [
+        "docker info",
+        "docker inspect <container> (confirm mounts/network/security/limits)",
+        "Write a test file in /workspace, restart container, read the same file"
+      ],
+      "constraints": [
+        "No privileged container, network, source tree mount, Docker socket, or host file bindings.",
+        "Read-only container root filesystem; only /workspace and limited /tmp writable."
+      ]
+    },
+    {
+      "id": "K2",
+      "name": "Implement minimal computer backend",
+      "start_conditions": [
+        "K1 container design and security flags are defined."
+      ],
+      "steps": [
+        "Create src/computer_backend.py exposing start/status/execute/list/read/write/stop for ONE fixed container and volume.",
+        "Invoke Docker with subprocess argv arrays, shell=False. Use fixed image, container, volume names.",
+        "Execute one shell command at a time inside the container; make current working directory explicit and restricted to /workspace (cd may be backend-managed).",
+        "Implement list/read/write through container operations and canonical path checks, not by opening host files.",
+        "Enforce bounded output, per-command timeout with container-side process termination, and meaningful Docker-offline errors."
+      ],
+      "target_end_state": "Python API can run commands and manipulate files in the one isolated workspace without the game UI.",
+      "verification": [
+        "Run pwd, ls, python -c, mkdir and file read/write inside container.",
+        "Reject paths traversing outside /workspace or resolving through a symlink outside /workspace.",
+        "Simulate missing Docker and confirm no host execution.",
+        "Verify long-running commands terminate within the agreed timeout."
+      ],
+      "constraints": [
+        "No local host filesystem fallback.",
+        "No generic Docker control API exposed to game objects.",
+        "No multi-container support."
+      ]
+    },
+    {
+      "id": "K3",
+      "name": "Build one mini desktop",
+      "start_conditions": [
+        "K2 backend works in isolation."
+      ],
+      "steps": [
+        "Create src/surfaces/computer.py as a themed Tkinter Toplevel window.",
+        "Provide three views using basic ttk/tk primitives: Files (folders/list/open), Terminal (command/output), Editor (edit/save text).",
+        "Wire all three to the same backend and /workspace.",
+        "Run Docker interactions on workers; communicate results safely back to the Tk thread.",
+        "Provide Close/Return control; display timeouts and Docker errors without crashing."
+      ],
+      "target_end_state": "Desktop can browse, edit and run commands, then close cleanly with persistent files.",
+      "verification": [
+        "Create and edit a text file, then cat it from the terminal.",
+        "Create a folder via shell and see it in Files.",
+        "Close/reopen desktop and retain data.",
+        "GUI remains responsive during a slow operation."
+      ],
+      "constraints": [
+        "No embedded browser, desktop environment, multiprocess app framework, or real interactive PTY.",
+        "One simple window, not a new app shell."
+      ]
+    },
+    {
+      "id": "K4",
+      "name": "Connect one world object",
+      "start_conditions": [
+        "K3 desktop works independently."
+      ],
+      "steps": [
+        "In src/game.py, detect a visible room object with kind=terminal when the player types 'use computer' (and optionally 'use <object name>').",
+        "Use the existing object lookup conventions and explicit ambiguity/error messages.",
+        "In src/surfaces/game.py, open the computer Toplevel on a recognized game action; do not change Notebook tabs.",
+        "Keep world object data separate from Docker runtime configuration; use fixed sandbox identifiers.",
+        "Update help text; add a terminal object manually through the existing Builder, without modifying shipped data/world.json."
+      ],
+      "target_end_state": "Player uses a terminal object in a room, operates computer, closes it, and resumes same game session.",
+      "verification": [
+        "use computer opens the desktop only when visible matching kind=terminal object exists.",
+        "No terminal here produces clear feedback.",
+        "Phone still answers and hangs up.",
+        "Room, inventory, and game transcript preserved after closing computer."
+      ],
+      "constraints": [
+        "Do not change WorldBuilder schema, builder UI, or live world files unless a test proves necessary.",
+        "Do not rename src/game.py or src/surfaces/game.py here.",
+        "Do not reset world on computer open/close."
+      ]
+    },
+    {
+      "id": "K5",
+      "name": "Regression and isolation checks",
+      "start_conditions": [
+        "K4 game integration is complete."
+      ],
+      "steps": [
+        "Create tests/test_computer.py with backend and game-command tests, mocking Docker for unit tests.",
+        "Run a separate real-Docker integration smoke test only when Docker is available.",
+        "Confirm one volume persists, container network is disabled, there are no bind mounts, and hostile paths are rejected.",
+        "Run existing game, builder, phone tests and a GUI smoke test."
+      ],
+      "target_end_state": "Functional and security claims have reproducible checks; previously working features still pass.",
+      "verification": [
+        "python -m compileall -q src tests",
+        "python -m unittest discover -s tests -v",
+        "Docker inspect and in-container smoke checks",
+        "Manual open/run/edit/close/reopen game workflow"
+      ],
+      "constraints": [
+        "Do not claim Docker is escape-proof.",
+        "No silent skipped tests; label Docker-unavailable cases explicitly."
+      ]
+    },
+    {
+      "id": "K6",
+      "name": "Document, report, park",
+      "start_conditions": [
+        "K5 checks pass or blockers are clearly recorded."
+      ],
+      "steps": [
+        "Add brief usage and Docker prerequisites to existing README.md.",
+        "Report files changed, test commands/results, security boundaries and remaining risks.",
+        "Back up the working slice and park the tranche."
+      ],
+      "target_end_state": "Verified, documented KleinOS v0.1, with no active scope expansion.",
+      "verification": [
+        "Stop conditions below are either verified or explicitly blocked."
+      ],
+      "constraints": [
+        "No room publishing, generated game worlds, AI coding agent, multiple computers, or OS redesign."
+      ]
+    }
+  ],
+  "stop_conditions": [
+    "One in-room computer object opens a real mini desktop.",
+    "Desktop has Files, Terminal, Editor using the same /workspace.",
+    "Commands run only in the offline Docker container; no host fallback.",
+    "Files persist through window close and container restart.",
+    "Host files unavailable through container mounts; path/traversal checks enforced.",
+    "Opening/closing does not reset current gameplay; telephone still works.",
+    "Syntax checks and all existing/new tests pass.",
+    "Builder reports results, documents, and parks."
+  ],
+  "out_of_scope_v0_2": "Create world JSON in sandbox -> trusted WorldBuilder validate/preview -> explicit user approval -> import/save -> reload world. Never direct sandbox writes to live world."
+}
