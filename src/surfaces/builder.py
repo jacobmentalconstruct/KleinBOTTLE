@@ -91,6 +91,7 @@ class BuilderSurface(ttk.Frame):
         row = ttk.Frame(content)
         row.pack(fill="x", pady=(8, 3))
         ttk.Button(row, text="Add Object...", command=self.add_object).pack(side="left")
+        ttk.Button(row, text="Edit Object...", command=self.edit_object).pack(side="left", padx=8)
         ttk.Button(row, text="Full Room JSON...", command=self.edit_room_json).pack(side="left", padx=8)
         ttk.Button(row, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
         self.status = tk.StringVar(value="Ready")
@@ -242,37 +243,117 @@ class BuilderSurface(ttk.Frame):
             return
         self.status.set("World settings saved")
 
+    def _object_list(self) -> list[dict]:
+        try:
+            objects = json.loads(self.objects.get("1.0", "end-1c") or "[]")
+        except json.JSONDecodeError as exc:
+            raise WorldValidationError(f"Objects JSON: {exc}") from exc
+        if not isinstance(objects, list) or not all(isinstance(item, dict) for item in objects):
+            raise WorldValidationError("Objects must be a JSON array of objects")
+        return objects
+
     def add_object(self) -> None:
+        try:
+            objects = self._object_list()
+        except WorldValidationError as exc:
+            messagebox.showerror("Objects JSON", str(exc), parent=self)
+            return
+        self._object_dialog(objects, None)
+
+    def edit_object(self) -> None:
+        try:
+            objects = self._object_list()
+        except WorldValidationError as exc:
+            messagebox.showerror("Objects JSON", str(exc), parent=self)
+            return
+        if not objects:
+            messagebox.showinfo("Edit Object", "Add an object first.", parent=self)
+            return
         window = tk.Toplevel(self)
         style_dialog(window)
-        window.title("Add Object")
+        window.title("Select Object")
+        window.transient(self.winfo_toplevel())
+        window.resizable(False, False)
+        choices = [f"{obj.get('name', '(unnamed)')} [{obj.get('id', i)}]"
+                   for i, obj in enumerate(objects)]
+        choice = ttk.Combobox(window, state="readonly", values=choices, width=48)
+        choice.current(0)
+        ttk.Label(window, text="Choose an object to edit:").pack(anchor="w", padx=12, pady=(10, 5))
+        choice.pack(fill="x", padx=12)
+        def open_selected() -> None:
+            index = choice.current()
+            window.destroy()
+            if index >= 0:
+                self._object_dialog(objects, index)
+        ttk.Button(window, text="Edit", style="Accent.TButton", command=open_selected).pack(anchor="e", padx=12, pady=12)
+
+    def _object_dialog(self, objects: list[dict], index: int | None) -> None:
+        """Create or edit an object in the current room form; Save Room persists it."""
+        existing = objects[index] if index is not None else {}
+        window = tk.Toplevel(self)
+        style_dialog(window)
+        window.title("Edit Object" if index is not None else "Add Object")
+        window.geometry("640x560")
         window.transient(self.winfo_toplevel())
         window.grab_set()
-        window.resizable(False, False)
-        fields = {}
-        for index, (key, label) in enumerate((("id", "Object ID"), ("name", "Name"), ("kind", "Kind (item/furniture/etc)"), ("description", "Description"))):
-            ttk.Label(window, text=label).grid(row=index, column=0, padx=12, pady=7, sticky="e")
-            fields[key] = tk.StringVar()
-            ttk.Entry(window, textvariable=fields[key], width=44).grid(row=index, column=1, padx=12, pady=7)
-        fields["kind"].set("item")
+        fields: dict[str, tk.StringVar] = {}
+        for row, (key, label, default) in enumerate((
+            ("id", "Object ID", ""), ("name", "Name", ""),
+            ("kind", "Kind (use telephone for the phone)", "item"),
+            ("description", "Description", ""),
+        )):
+            ttk.Label(window, text=label).grid(row=row, column=0, padx=12, pady=7, sticky="e")
+            fields[key] = tk.StringVar(value=str(existing.get(key, default)))
+            entry = ttk.Entry(window, textvariable=fields[key], width=49)
+            entry.grid(row=row, column=1, padx=12, pady=7, sticky="ew")
+            if key == "id" and index is not None:
+                entry.configure(state="readonly")
+        phone = existing.get("ollama") if isinstance(existing.get("ollama"), dict) else {}
+        ttk.Separator(window, orient="horizontal").grid(row=4, columnspan=2, sticky="ew", padx=12, pady=(12, 6))
+        ttk.Label(window, text="Telephone / local Ollama (only used when kind = telephone)").grid(
+            row=5, columnspan=2, sticky="w", padx=12)
+        model = tk.StringVar(value=str(phone.get("model", "qwen2.5:3b")))
+        ttk.Label(window, text="Model").grid(row=6, column=0, sticky="e", padx=12, pady=7)
+        ttk.Entry(window, textvariable=model, width=49).grid(row=6, column=1, padx=12, sticky="ew")
+        ttk.Label(window, text="System prompt").grid(row=7, column=0, sticky="ne", padx=12, pady=7)
+        system = tk.Text(window, height=7, width=48, wrap="word", undo=True)
+        style_text(system, font=FONT_UI)
+        system.grid(row=7, column=1, padx=12, pady=7, sticky="nsew")
+        system.insert("1.0", str(phone.get("system", "")))
+        ringing = tk.BooleanVar(value=existing.get("ringing", True) is True)
+        ttk.Checkbutton(window, text="Ringing when the world starts", variable=ringing).grid(
+            row=8, column=1, sticky="w", padx=12, pady=6)
+        ttk.Label(window, text="Requests always use 127.0.0.1:11434; no cloud endpoint.",
+                  style="Muted.TLabel").grid(row=9, columnspan=2, sticky="w", padx=12)
+        window.grid_columnconfigure(1, weight=1)
+        window.grid_rowconfigure(7, weight=1)
 
         def save() -> None:
-            try:
-                objs = json.loads(self.objects.get("1.0", "end-1c") or "[]")
-                if not isinstance(objs, list):
-                    raise WorldValidationError("Objects must be a JSON array")
-                obj = {key: var.get().strip() for key, var in fields.items()}
-                if not ID_PATTERN.fullmatch(obj["id"]) or not obj["name"]:
-                    raise WorldValidationError("Object ID and name are required; IDs cannot contain spaces")
-                if any(isinstance(existing, dict) and existing.get("id") == obj["id"] for existing in objs):
-                    raise WorldValidationError("Object ID already exists in this room")
-                objs.append(obj)
-                self._set_text(self.objects, pretty(objs).rstrip("\n"))
-            except (ValueError, WorldValidationError) as exc:
-                messagebox.showerror("Cannot add object", str(exc), parent=window)
+            obj = deepcopy(existing)
+            for key, var in fields.items():
+                obj[key] = var.get().strip()
+            if not ID_PATTERN.fullmatch(obj["id"]) or not obj["name"]:
+                messagebox.showerror("Cannot save object", "Object ID and name are required; IDs cannot contain spaces", parent=window)
                 return
+            if any(i != index and other.get("id") == obj["id"] for i, other in enumerate(objects)):
+                messagebox.showerror("Cannot save object", "Object ID already exists in this room", parent=window)
+                return
+            if obj["kind"].casefold() == "telephone":
+                obj["ollama"] = {"model": model.get().strip() or "qwen2.5:3b",
+                                  "system": system.get("1.0", "end-1c")}
+                obj["ringing"] = ringing.get()
+                obj["portable"] = False
+            # Leave non-telephone extra properties unchanged on edit.
+            if index is None:
+                objects.append(obj)
+            else:
+                objects[index] = obj
+            self._set_text(self.objects, pretty(objects).rstrip("\n"))
+            self.status.set("Object updated in form. Click Save Room to persist it.")
             window.destroy()
-        ttk.Button(window, text="Add", command=save).grid(row=len(fields), column=1, sticky="e", padx=12, pady=10)
+
+        ttk.Button(window, text="Apply to Room", style="Accent.TButton", command=save).grid(
+            row=10, column=1, sticky="e", padx=12, pady=12)
         window.bind("<Escape>", lambda _event: window.destroy())
 
     def edit_room_json(self) -> None:

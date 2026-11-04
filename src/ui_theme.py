@@ -84,6 +84,9 @@ def apply_theme(root: tk.Tk) -> None:
                     foreground=TEXT, font=FONT_HEADING)
     style.configure("TRadiobutton", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
     style.map("TRadiobutton", foreground=[("disabled", MUTED)])
+    style.configure("TCheckbutton", background=BACKGROUND, foreground=TEXT, font=FONT_UI)
+    style.map("TCheckbutton", foreground=[("disabled", MUTED)],
+              background=[("active", BACKGROUND)])
     style.configure("TPanedwindow", background=BACKGROUND)
     style.configure("TScrollbar", background=SURFACE, troughcolor=INSET,
                     arrowcolor=TEXT, bordercolor=BORDER)

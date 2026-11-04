@@ -9,6 +9,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from .world_store import WorldStore
+from .ollama_phone import DEFAULT_MODEL
+
+DEFAULT_PHONE_PROMPT = (
+    "You are a mysterious voice reached by telephone in a text adventure. "
+    "Stay in character. Respond conversationally and briefly (1-3 sentences). "
+    "You only speak through the telephone; do not narrate player actions."
+)
 
 
 @dataclass(frozen=True)
@@ -48,12 +55,18 @@ class GameSession:
         self.world: dict = {}
         self.room_id: str | None = None
         self.inventory: list[dict] = []
+        self.phone: dict | None = None
+        self.phone_history: list[dict] = []
+        self.call_serial = 0
         self.restart()
 
     def restart(self) -> str:
         """Reload the editor's saved world and begin a fresh play session."""
         self.world = deepcopy(self.store.load())
         self.inventory = []
+        self.phone = None
+        self.phone_history = []
+        self.call_serial += 1  # invalidate any in-flight replies after restart
         rooms = self.world["rooms"]
         self.room_id = self.world["start_room"] or (rooms[0]["id"] if rooms else None)
         return self.look()
@@ -85,6 +98,9 @@ class GameSession:
         objects = [obj for obj in room.get("objects", []) if not obj.get("hidden", False)]
         if objects:
             lines.append("You see: " + ", ".join(_name(obj) for obj in objects) + ".")
+        if any(str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing")
+               for obj in objects):
+            lines.append("A telephone rings relentlessly. You could 'answer phone'.")
         actors = [actor for actor in room.get("actors", []) if not actor.get("hidden", False)]
         if actors:
             lines.append("Present: " + ", ".join(_name(actor) for actor in actors) + ".")
@@ -128,7 +144,10 @@ class GameSession:
             return ambiguity
         if obj is None:
             return f"You don't see '{query}' here."
-        return f"{_name(obj)}\n{obj.get('description') or 'Nothing unusual stands out.'}"
+        description = f"{_name(obj)}\n{obj.get('description') or 'Nothing unusual stands out.'}"
+        if str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing"):
+            description += "\nIt keeps ringing. Try 'answer phone'."
+        return description
 
     @staticmethod
     def _portable(obj: dict) -> bool:
@@ -171,6 +190,67 @@ class GameSession:
     def inventory_text(self) -> str:
         return "You're carrying: " + ", ".join(_name(obj) for obj in self.inventory) + "." if self.inventory else "Your inventory is empty."
 
+    @property
+    def on_phone(self) -> bool:
+        return self.phone is not None
+
+    def answer_phone(self, query: str = "phone") -> str:
+        if self.on_phone:
+            return "You're already on the telephone. Type 'hang up' to end the call."
+        room = self._room()
+        if room is None:
+            return self.look()
+        phones = [obj for obj in room.get("objects", [])
+                  if not obj.get("hidden", False) and
+                  str(obj.get("kind", "")).casefold() == "telephone"]
+        if not phones:
+            return "There is no telephone here."
+        if query.casefold().strip() in {"", "phone", "telephone", "receiver"}:
+            if len(phones) != 1:
+                return "Which telephone? " + ", ".join(_name(obj) for obj in phones)
+            obj = phones[0]
+        else:
+            obj, ambiguity = _find(phones, query)
+            if ambiguity:
+                return ambiguity
+            if obj is None:
+                return f"No telephone named '{query}' is here."
+        self.phone = obj
+        self.phone_history = []
+        self.call_serial += 1
+        obj["ringing"] = False  # in-memory only; builder's world never changes
+        return f"You pick up {_name(obj)}. The ringing stops. A line clicks open..."
+
+    def hang_up(self) -> str:
+        if not self.on_phone:
+            return "You're not on a call."
+        self.phone = None
+        self.phone_history = []
+        self.call_serial += 1
+        return "You hang up the receiver."
+
+    def phone_payload(self, speech: str) -> tuple[int, str, list[dict]]:
+        """Prepare one local inference request; commits only after a successful reply."""
+        if self.phone is None:
+            raise ValueError("No active phone call")
+        settings = self.phone.get("ollama")
+        settings = settings if isinstance(settings, dict) else {}
+        model = settings.get("model") or DEFAULT_MODEL
+        system = settings.get("system") or DEFAULT_PHONE_PROMPT
+        # Keep a small, bounded history for the 3B model.
+        history = self.phone_history[-12:]
+        messages = [{"role": "system", "content": str(system)}, *history,
+                    {"role": "user", "content": speech}]
+        return self.call_serial, model, messages
+
+    def finish_phone_reply(self, serial: int, speech: str, reply: str) -> bool:
+        """Ignore late model responses after hangup or world reload."""
+        if not self.on_phone or self.call_serial != serial:
+            return False
+        self.phone_history.extend(({"role": "user", "content": speech},
+                                   {"role": "assistant", "content": reply}))
+        return True
+
     def execute(self, raw: str) -> str:
         command = raw.strip()
         if not command:
@@ -178,6 +258,14 @@ class GameSession:
         verb, _, arg = command.partition(" ")
         verb, arg = verb.casefold(), arg.strip()
         room = self._room()
+        if command.casefold() in {"hang up", "hangup"}:
+            return self.hang_up()
+        if self.on_phone:
+            return "You're on the telephone. Say something or 'hang up'."
+        if verb == "answer":
+            return self.answer_phone(arg)
+        if command.casefold() in {"pick up phone", "pick up telephone", "pick up receiver"}:
+            return self.answer_phone()
         if verb in {"help", "?"}:
             return ("Commands:\n"
                     "  look (l) — describe current room\n"
@@ -187,6 +275,8 @@ class GameSession:
                     "  take <item> (get, pick up)\n"
                     "  drop <item>\n"
                     "  inventory (i, inv)\n"
+                    "  answer phone — local Ollama conversation\n"
+                    "  hang up — end telephone call\n"
                     "  help (?)\n"
                     "  Reload World — restart from the builder's saved JSON")
         if verb in {"l", "look"} and not arg:

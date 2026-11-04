@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import messagebox, ttk
+import queue
+import threading
 
 from ..game import GameSession
+from ..ollama_phone import OllamaPhoneError, chat
 from ..world_model import WorldValidationError
 from ..ui_theme import ACCENT, FONT_HEADING, FONT_STORY, style_text
 
@@ -16,6 +19,9 @@ class GameSurface(ttk.Frame):
         self.command = tk.StringVar()
         self.location = tk.StringVar()
         self.inventory = tk.StringVar()
+        self._phone_results: queue.Queue = queue.Queue()
+        self._phone_busy = False
+        self._request_serial = 0
         self._build()
         self._render_initial()
 
@@ -93,12 +99,68 @@ class GameSurface(ttk.Frame):
         self.run(command)
 
     def run(self, command: str) -> None:
-        self._append("> " + command, "command")
-        self._append(self.session.execute(command))
+        normalized = command.strip().casefold()
+        if self.session.on_phone:
+            if normalized in {"hang up", "hangup"}:
+                self._request_serial += 1  # abandon any pending model response
+                self._phone_busy = False
+                self._append("> " + command, "command")
+                self._append(self.session.execute(command))
+            elif self._phone_busy:
+                self._append("The voice is still responding. You can 'hang up'.")
+            else:
+                speech = command[4:].strip() if normalized.startswith("say ") else command.strip()
+                if speech:
+                    self._append("> " + speech, "command")
+                    self._ask_phone(speech)
+        else:
+            self._append("> " + command, "command")
+            self._append(self.session.execute(command))
+            if self.session.on_phone:
+                self._append("> Hello?", "command")
+                self._ask_phone("Hello?")
         self._sync()
         self.entry.focus_set()
 
+    def _ask_phone(self, speech: str) -> None:
+        call_serial, model, messages = self.session.phone_payload(speech)
+        self._request_serial += 1
+        serial = self._request_serial
+        self._phone_busy = True
+        self._append(f"[Calling local Ollama: {model} ...]")
+
+        def worker() -> None:
+            try:
+                reply = chat(model, messages)
+                self._phone_results.put((serial, call_serial, speech, reply, None))
+            except OllamaPhoneError as exc:
+                self._phone_results.put((serial, call_serial, speech, None, str(exc)))
+            except Exception as exc:
+                self._phone_results.put((serial, call_serial, speech, None,
+                                         f"Local Ollama request failed: {type(exc).__name__}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.after(100, self._poll_phone)
+
+    def _poll_phone(self) -> None:
+        try:
+            while True:
+                serial, call_serial, speech, reply, error = self._phone_results.get_nowait()
+                if serial != self._request_serial or not self.session.on_phone:
+                    continue
+                self._phone_busy = False
+                if error:
+                    self._append(f"[Telephone offline] {error}")
+                elif self.session.finish_phone_reply(call_serial, speech, reply):
+                    self._append("Voice: " + reply)
+        except queue.Empty:
+            pass
+        if self._phone_busy and self.winfo_exists():
+            self.after(100, self._poll_phone)
+
     def reload_world(self) -> None:
+        self._request_serial += 1
+        self._phone_busy = False
         try:
             first_description = self.session.restart()
         except (WorldValidationError, OSError) as exc:

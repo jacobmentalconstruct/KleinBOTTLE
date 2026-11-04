@@ -17,6 +17,12 @@
           "name": "Oak Table",
           "kind": "furniture",
           "description": "A scarred oak table."
+        },
+        {
+          "id": "phone",
+          "name": "telephone",
+          "kind": "telephone",
+          "description": "A small black telephone is on the table."
         }
       ],
       "actors": [],

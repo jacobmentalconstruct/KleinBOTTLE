@@ -74,6 +74,28 @@ Room IDs cannot be renamed through the form (to protect exit references). Deleti
 
 ## Architecture
 
+
+## Telephone / local Ollama (optional)
+
+Install Ollama on the same computer and run `ollama pull qwen2.5:3b`.
+Ollama must be running at `127.0.0.1:11434`. No cloud service or API key is used.
+
+In the World Builder, open a room, choose **Add Object** or **Edit Object**,
+set **Kind** to `telephone`, and set its local **Model**, **System prompt**, and
+**Ringing** checkbox. Click **Apply to Room**, then **Save Room**. The model
+and persona are stored inside that object's JSON as `ollama.model` and
+`ollama.system`. The phone does not depend on either development sidecar.
+
+In Play, type `answer phone` while in the room. A `Hello?` starts the call;
+type natural dialogue (or `say hello`) until `hang up`. Each call keeps its
+own brief in-memory conversation; no call logs are saved to world JSON.
+The interface remains responsive during inference and an Ollama failure
+shows an offline message rather than breaking the game.
+
+The example world contains a ringing phone in the Study. This patch intentionally
+does not change `data/world.json`: bring your own phone into any room using
+the object editor.
+
 ```text
 src/app.py                    thin app shell; Tk root and two surface tabs
 src/surfaces/builder.py       editor surface / forms
