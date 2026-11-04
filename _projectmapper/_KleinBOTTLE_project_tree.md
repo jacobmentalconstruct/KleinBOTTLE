@@ -1,0 +1,108 @@
+# Project Tree
+
+This standalone tree is intended as a lightweight project surface map. It can be shared without the full filedump so an agent can see the project shape, identify missing/unincluded files, and request specific follow-up uploads when needed.
+
+The SQLite snapshot remains the authoritative truth source for the manifest, selected file contents, skipped paths, exclusion rules, mapper state, and environment hints.
+
+- Source root: `C:\Jacob\_GameDESIGN\_KleinBOTTLE`
+- Snapshot: `_KleinBOTTLE_snapshot.sqlite3`
+- Generated: `2026-11-04T10:23:23`
+
+```text
+[x] 📁 _KleinBOTTLE/
+    [x] 📁 .microservice-library/
+        [x] 📁 services/
+            [x] 📄 _ArchiveBotMS.py
+            [x] 📄 _AuthMS.py
+            [x] 📄 _CartridgeServiceMS.py
+            [x] 📄 _ChalkBoardMS.py
+            [x] 📄 _ChunkingRouterMS.py
+            [x] 📄 _CodeChunkerMS.py
+            [x] 📄 _CodeFormatterMS.py
+            [x] 📄 _CodeGrapherMS.py
+            [x] 📄 _CodeJanitorMS.py
+            [x] 📄 _CognitiveMemoryMS.py
+            [x] 📄 _ContentExtractorMS.py
+            [x] 📄 _ContextAggregatorMS.py
+            [x] 📄 _ContextPackerMS.py
+            [x] 📄 _DiffEngineMS.py
+            [x] 📄 _EnvironmentManagerMS.py
+            [x] 📄 _ExplorerWidgetMS.py
+            [x] 📄 _FingerprintScannerMS.py
+            [x] 📄 _GitPilotMS.py
+            [x] 📄 _HeuristicSumMS.py
+            [x] 📄 _IngestEngineMS.py
+            [x] 📄 _IntakeServiceMS.py
+            [x] 📄 _IsoProcessMS.py
+            [x] 📄 _LexicalSearchMS.py
+            [x] 📄 _LibrarianMS.py
+            [x] 📄 _LibrarianServiceMS.py
+            [x] 📄 _LogViewMS.py
+            [x] 📄 _MonacoHostMS.py
+            [x] 📄 _NetworkLayoutMS.py
+            [x] 📄 _NeuralGraphEngineMS.py
+            [x] 📄 _NeuralGraphViewerMS.py
+            [x] 📄 _NeuralServiceMS.py
+            [x] 📄 _ProjectForgeMS.py
+            [x] 📄 _PromptOptimizerMS.py
+            [x] 📄 _PromptVaultMS.py
+            [x] 📄 _PythonChunkerMS.py
+            [x] 📄 _RefineryServiceMS.py
+            [x] 📄 _RegexWeaverMS.py
+            [x] 📄 _RoleManagerMS.py
+            [x] 📄 _SandboxManagerMS.py
+            [x] 📄 _ScoutMS.py
+            [x] 📄 _SearchEngineMS.py
+            [x] 📄 _SemanticChunkerMS.py
+            [x] 📄 _ServiceRegistryMS.py
+            [x] 📄 _SpinnerThingyMaBobberMS.py
+            [x] 📄 _SysInspectorMS.py
+            [x] 📄 _TasklistVaultMS.py
+            [x] 📄 _TelemetryServiceMS.py
+            [x] 📄 _TextChunkerMS.py
+            [x] 📄 _ThoughtStreamMS.py
+            [x] 📄 _TkinterAppShellMS.py
+            [x] 📄 _TkinterSmartExplorerMS.py
+            [x] 📄 _TkinterThemeManagerMS.py
+            [x] 📄 _TkinterUniButtonMS.py
+            [x] 📄 _TreeMapperMS.py
+            [x] 📄 _WebScraperMS.py
+            [x] 📄 _WorkbenchLayoutMS.py
+            [x] 📄 base_service.py
+            [x] 📄 microservice_std_lib.py
+        [x] 📄 .sidecar.json
+        [x] 📄 cli.py
+        [x] 📄 codex.md
+        [x] 📄 LICENSE.md
+        [x] 📄 mcp_server.py
+        [x] 📄 pyproject.toml
+        [x] 📄 README.md
+    [x] 📁 _spine/
+        [x] 📄 inference-runs.jsonl
+        [x] 📄 klein-bottle-spine.jsonl
+        [x] 📄 things-to-fix.jsonl
+    [x] 📁 data/
+        [x] 📄 raithetopia.json
+        [x] 📄 world.json
+    [x] 📁 examples/
+        [x] 📄 rooms.json
+    [x] 📁 src/
+        [x] 📁 surfaces/
+            [x] 📄 __init__.py
+            [x] 📄 builder.py
+            [x] 📄 game.py
+        [x] 📄 __init__.py
+        [x] 📄 app.py
+        [x] 📄 game.py
+        [x] 📄 world_builder.py
+        [x] 📄 world_model.py
+        [x] 📄 world_store.py
+    [x] 📁 tests/
+        [x] 📄 test_game.py
+        [x] 📄 test_world_builder.py
+    [x] 📄 .gitignore
+    [x] 📄 LICENSE.md
+    [x] 📄 README.md
+    [x] 📄 run.bat
+    [x] 📄 run.sh
+```

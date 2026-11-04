@@ -1,0 +1,231 @@
+{
+  "format": "projectmapper-backup",
+  "version": 2,
+  "scope": "project",
+  "kind": "changeset",
+  "action": "project_patch.apply",
+  "operation_id": "5a863bf7-dc77-4a95-8e64-47a8a7897ab3",
+  "created_at": "2026-11-04T16:30:28.128349+00:00",
+  "files": [
+    {
+      "target": "src/app.py",
+      "stored": "0001.bin",
+      "sha256": "8a33f5488fd599f2bec1c2ff484eec6b531b7fc7a5dd1329b8a6ac2420f0ee15",
+      "size": 1224,
+      "mode": 438
+    },
+    {
+      "target": "src/surfaces/builder.py",
+      "stored": "0002.bin",
+      "sha256": "f16fff5c6eaa5dad0edb5b863a54c6db95e543fe76ea5e120b165fbf47d3f05b",
+      "size": 17735,
+      "mode": 438
+    },
+    {
+      "target": "src/surfaces/game.py",
+      "stored": "0003.bin",
+      "sha256": "7bfbc79ef10c712f81b0d5a95b546a7a68c7799bf3ac571d2d40a8b3cdbc3430",
+      "size": 5150,
+      "mode": 438
+    }
+  ],
+  "changeset": {
+    "forward": {
+      "version": 2,
+      "ops": [
+        {
+          "op": "create",
+          "path": "src/ui_theme.py",
+          "content": "\"\"\"Midnight Blue Tk/ttk presentation for KleinBOTTLE.\n\nThis module is a local copy of theme values, not a dependency on development\nsidecars. Widgets keep their existing behavior; only their presentation changes.\n\"\"\"\nfrom __future__ import annotations\n\nimport tkinter as tk\nfrom tkinter import ttk\n\nBACKGROUND = \"#1e1e2f\"\nINSET = \"#151521\"\nSURFACE = \"#2a2a3f\"\nACCENT = \"#007ACC\"\nTEXT = \"#E7EDF4\"\nMUTED = \"#97A4B3\"\nSTATUS = \"#00FF00\"\nDANGER = \"#C23621\"\nBORDER = \"#333333\"\n\nFONT_UI = (\"Segoe UI\", 9)\nFONT_HEADING = (\"Segoe UI\", 10, \"bold\")\nFONT_MONO = (\"Consolas\", 9)\nFONT_STORY = (\"Segoe UI\", 10)\n\n\ndef apply_theme(root: tk.Tk) -> None:\n    \"\"\"Set the single application-wide ttk style before creating either surface.\"\"\"\n    root.configure(bg=BACKGROUND)\n    style = ttk.Style(root)\n    style.theme_use(\"clam\")\n\n    style.configure(\".\", background=BACKGROUND, foreground=TEXT, font=FONT_UI)\n    style.configure(\"TFrame\", background=BACKGROUND)\n    style.configure(\"TLabel\", background=BACKGROUND, foreground=TEXT, font=FONT_UI)\n    style.configure(\"Heading.TLabel\", font=FONT_HEADING)\n    style.configure(\"Muted.TLabel\", foreground=MUTED)\n    style.configure(\"Status.TLabel\", foreground=STATUS)\n\n    style.configure(\"TButton\", background=SURFACE, foreground=TEXT,\n                    bordercolor=BORDER, borderwidth=1, relief=\"flat\", padding=(10, 5))\n    style.map(\"TButton\",\n              background=[(\"pressed\", ACCENT), (\"active\", ACCENT)],\n              foreground=[(\"disabled\", MUTED), (\"active\", \"#FFFFFF\")])\n    style.configure(\"Accent.TButton\", background=ACCENT, foreground=\"#FFFFFF\")\n    style.map(\"Accent.TButton\",\n              background=[(\"pressed\", \"#0065a8\"), (\"active\", \"#178cdb\")],\n              foreground=[(\"disabled\", MUTED), (\"active\", \"#FFFFFF\")])\n    style.configure(\"Danger.TButton\", background=DANGER, foreground=\"#FFFFFF\")\n    style.map(\"Danger.TButton\",\n              background=[(\"pressed\", \"#8c291b\"), (\"active\", \"#a52d1c\")],\n              foreground=[(\"disabled\", MUTED), (\"active\", \"#FFFFFF\")])\n\n    style.configure(\"TEntry\", fieldbackground=INSET, foreground=TEXT,\n                    bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER, padding=5)\n    style.map(\"TEntry\", fieldbackground=[(\"readonly\", SURFACE), (\"disabled\", SURFACE)],\n              foreground=[(\"disabled\", MUTED)])\n    style.configure(\"TCombobox\", fieldbackground=INSET, foreground=TEXT,\n                    background=SURFACE, arrowcolor=TEXT, bordercolor=BORDER, padding=4,\n                    selectbackground=ACCENT, selectforeground=\"#FFFFFF\")\n    style.map(\"TCombobox\",\n              fieldbackground=[(\"readonly\", INSET), (\"disabled\", SURFACE)],\n              foreground=[(\"readonly\", TEXT), (\"disabled\", MUTED)],\n              selectbackground=[(\"readonly\", ACCENT)],\n              selectforeground=[(\"readonly\", \"#FFFFFF\")])\n    root.option_add(\"*TCombobox*Listbox.background\", INSET)\n    root.option_add(\"*TCombobox*Listbox.foreground\", TEXT)\n    root.option_add(\"*TCombobox*Listbox.selectBackground\", ACCENT)\n    root.option_add(\"*TCombobox*Listbox.selectForeground\", \"#FFFFFF\")\n\n    style.configure(\"TNotebook\", background=BACKGROUND, borderwidth=0)\n    style.configure(\"TNotebook.Tab\", background=SURFACE, foreground=MUTED,\n                    padding=(14, 8), borderwidth=0)\n    style.map(\"TNotebook.Tab\",\n              background=[(\"selected\", BACKGROUND), (\"active\", ACCENT)],\n              foreground=[(\"selected\", TEXT), (\"active\", \"#FFFFFF\")])\n    style.configure(\"TTreeview\", background=INSET, fieldbackground=INSET,\n                    foreground=TEXT, rowheight=25, bordercolor=BORDER,\n                    borderwidth=0, font=FONT_UI)\n    style.map(\"TTreeview\", background=[(\"selected\", ACCENT)],\n              foreground=[(\"selected\", \"#FFFFFF\")])\n    style.configure(\"TLabelFrame\", background=BACKGROUND, bordercolor=BORDER)\n    style.configure(\"TLabelFrame.Label\", background=BACKGROUND,\n                    foreground=TEXT, font=FONT_HEADING)\n    style.configure(\"TRadiobutton\", background=BACKGROUND, foreground=TEXT, font=FONT_UI)\n    style.map(\"TRadiobutton\", foreground=[(\"disabled\", MUTED)])\n    style.configure(\"TPanedwindow\", background=BACKGROUND)\n    style.configure(\"TScrollbar\", background=SURFACE, troughcolor=INSET,\n                    arrowcolor=TEXT, bordercolor=BORDER)\n    style.map(\"TScrollbar\", background=[(\"active\", ACCENT)])\n\n\ndef style_text(widget: tk.Text, *, font: tuple = FONT_MONO) -> None:\n    \"\"\"ttk styles do not affect classic tk.Text widgets; style them explicitly.\"\"\"\n    widget.configure(bg=INSET, fg=TEXT, insertbackground=TEXT,\n                     selectbackground=ACCENT, selectforeground=\"#FFFFFF\",\n                     highlightthickness=1, highlightbackground=BORDER,\n                     highlightcolor=ACCENT, relief=\"flat\", font=font)\n\n\ndef style_dialog(window: tk.Toplevel) -> None:\n    \"\"\"Ensure classic Tk dialog backgrounds match the ttk theme.\"\"\"\n    window.configure(bg=BACKGROUND)\n"
+        },
+        {
+          "op": "patch",
+          "path": "src/app.py",
+          "hunks": [
+            {
+              "description": "Import local UI theme (no sidecar dependency)",
+              "search_block": "from .surfaces.game import GameSurface\n",
+              "replace_block": "from .surfaces.game import GameSurface\nfrom .ui_theme import apply_theme\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Apply Midnight Blue before building Notebook and surfaces",
+              "search_block": "    root = tk.Tk()\n    root.title(\"Adventure \u2014 World Builder & Play\")\n",
+              "replace_block": "    root = tk.Tk()\n    apply_theme(root)\n    root.title(\"Adventure \u2014 World Builder & Play\")\n",
+              "use_patch_indent": false
+            }
+          ]
+        },
+        {
+          "op": "patch",
+          "path": "src/surfaces/builder.py",
+          "hunks": [
+            {
+              "description": "Import local classic Tk text and Toplevel styling helpers",
+              "search_block": "from ..world_model import ID_PATTERN, WorldValidationError, pretty\n",
+              "replace_block": "from ..world_model import ID_PATTERN, WorldValidationError, pretty\nfrom ..ui_theme import FONT_UI, style_dialog, style_text\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Use themed navigation headings and danger action",
+              "search_block": "        ttk.Label(nav, text=\"Areas / Rooms\", font=(\"TkDefaultFont\", 11, \"bold\")).pack(anchor=\"w\", pady=(0, 5))\n",
+              "replace_block": "        ttk.Label(nav, text=\"Areas / Rooms\", style=\"Heading.TLabel\").pack(anchor=\"w\", pady=(0, 5))\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Style destructive Delete action",
+              "search_block": "        ttk.Button(controls, text=\"Delete\", command=self.delete_room).pack(side=\"left\", padx=2)\n",
+              "replace_block": "        ttk.Button(controls, text=\"Delete\", style=\"Danger.TButton\", command=self.delete_room).pack(side=\"left\", padx=2)\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Use themed Room Editor heading",
+              "search_block": "        ttk.Label(content, text=\"Room Editor\", font=(\"TkDefaultFont\", 13, \"bold\")).pack(anchor=\"w\", pady=(0, 9))\n",
+              "replace_block": "        ttk.Label(content, text=\"Room Editor\", style=\"Heading.TLabel\").pack(anchor=\"w\", pady=(0, 9))\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Theme multi-line description, exits and JSON controls",
+              "search_block": "        self.description = tk.Text(content, height=4, wrap=\"word\", undo=True)\n        self.description.pack(fill=\"x\")\n        ttk.Label(content, text=\"Exits \u2014 one per line: direction:room_id\").pack(anchor=\"w\", pady=(9, 2))\n        self.exits = tk.Text(content, height=4, wrap=\"none\", undo=True)\n        self.exits.pack(fill=\"x\")\n",
+              "replace_block": "        self.description = tk.Text(content, height=4, wrap=\"word\", undo=True)\n        style_text(self.description, font=FONT_UI)\n        self.description.pack(fill=\"x\")\n        ttk.Label(content, text=\"Exits \u2014 one per line: direction:room_id\").pack(anchor=\"w\", pady=(9, 2))\n        self.exits = tk.Text(content, height=4, wrap=\"none\", undo=True)\n        style_text(self.exits)\n        self.exits.pack(fill=\"x\")\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Theme objects JSON editor and emphasize Save Room",
+              "search_block": "        self.objects = tk.Text(content, height=7, wrap=\"none\", undo=True)\n        self.objects.pack(fill=\"both\", expand=True)\n        row = ttk.Frame(content)\n        row.pack(fill=\"x\", pady=(8, 3))\n        ttk.Button(row, text=\"Add Object...\", command=self.add_object).pack(side=\"left\")\n        ttk.Button(row, text=\"Full Room JSON...\", command=self.edit_room_json).pack(side=\"left\", padx=8)\n        ttk.Button(row, text=\"Save Room\", command=self.save_room).pack(side=\"right\")\n        self.status = tk.StringVar(value=\"Ready\")\n        ttk.Label(self, textvariable=self.status, anchor=\"w\").pack(fill=\"x\", pady=(8, 0))\n",
+              "replace_block": "        self.objects = tk.Text(content, height=7, wrap=\"none\", undo=True)\n        style_text(self.objects)\n        self.objects.pack(fill=\"both\", expand=True)\n        row = ttk.Frame(content)\n        row.pack(fill=\"x\", pady=(8, 3))\n        ttk.Button(row, text=\"Add Object...\", command=self.add_object).pack(side=\"left\")\n        ttk.Button(row, text=\"Full Room JSON...\", command=self.edit_room_json).pack(side=\"left\", padx=8)\n        ttk.Button(row, text=\"Save Room\", style=\"Accent.TButton\", command=self.save_room).pack(side=\"right\")\n        self.status = tk.StringVar(value=\"Ready\")\n        ttk.Label(self, textvariable=self.status, anchor=\"w\", style=\"Status.TLabel\").pack(fill=\"x\", pady=(8, 0))\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Apply dark background to Add Object popup",
+              "search_block": "        window = tk.Toplevel(self)\n        window.title(\"Add Object\")\n",
+              "replace_block": "        window = tk.Toplevel(self)\n        style_dialog(window)\n        window.title(\"Add Object\")\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Apply dark background and JSON editor style to full-room popup",
+              "search_block": "        window = tk.Toplevel(self)\n        window.title(f\"Room JSON \u2014 {self.selected_id}\")\n        window.geometry(\"750x610\")\n        window.transient(self.winfo_toplevel())\n        editor = tk.Text(window, wrap=\"none\", undo=True)\n        editor.pack(fill=\"both\", expand=True, padx=10, pady=10)\n",
+              "replace_block": "        window = tk.Toplevel(self)\n        style_dialog(window)\n        window.title(f\"Room JSON \u2014 {self.selected_id}\")\n        window.geometry(\"750x610\")\n        window.transient(self.winfo_toplevel())\n        editor = tk.Text(window, wrap=\"none\", undo=True)\n        style_text(editor)\n        editor.pack(fill=\"both\", expand=True, padx=10, pady=10)\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Apply dark background and JSON editor style to import popup",
+              "search_block": "        window = tk.Toplevel(self)\n        window.title(\"Import / Paste Rooms or World JSON\")\n        window.geometry(\"830x610\")\n        window.transient(self.winfo_toplevel())\n        ttk.Label(window, text=\"Paste a room object, list of rooms, or a {rooms: [...]} world document.\").pack(anchor=\"w\", padx=10, pady=5)\n        editor = tk.Text(window, wrap=\"none\", undo=True)\n        editor.pack(fill=\"both\", expand=True, padx=10, pady=5)\n",
+              "replace_block": "        window = tk.Toplevel(self)\n        style_dialog(window)\n        window.title(\"Import / Paste Rooms or World JSON\")\n        window.geometry(\"830x610\")\n        window.transient(self.winfo_toplevel())\n        ttk.Label(window, text=\"Paste a room object, list of rooms, or a {rooms: [...]} world document.\").pack(anchor=\"w\", padx=10, pady=5)\n        editor = tk.Text(window, wrap=\"none\", undo=True)\n        style_text(editor)\n        editor.pack(fill=\"both\", expand=True, padx=10, pady=5)\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Use accented Apply/Import confirmation actions",
+              "search_block": "        ttk.Button(window, text=\"Apply JSON\", command=apply).pack(anchor=\"e\", padx=10, pady=(0, 10))\n",
+              "replace_block": "        ttk.Button(window, text=\"Apply JSON\", style=\"Accent.TButton\", command=apply).pack(anchor=\"e\", padx=10, pady=(0, 10))\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Use accented Import confirmation action",
+              "search_block": "        ttk.Button(actions, text=\"Import\", command=apply).pack(side=\"right\")\n",
+              "replace_block": "        ttk.Button(actions, text=\"Import\", style=\"Accent.TButton\", command=apply).pack(side=\"right\")\n",
+              "use_patch_indent": false
+            }
+          ]
+        },
+        {
+          "op": "patch",
+          "path": "src/surfaces/game.py",
+          "hunks": [
+            {
+              "description": "Import local shared game UI theme tokens",
+              "search_block": "from ..world_model import WorldValidationError\n",
+              "replace_block": "from ..world_model import WorldValidationError\nfrom ..ui_theme import ACCENT, FONT_HEADING, FONT_STORY, style_text\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Use shared headings and accent Restart action",
+              "search_block": "        ttk.Label(top, text=\"Play\", font=(\"TkDefaultFont\", 14, \"bold\")).pack(side=\"left\")\n        ttk.Button(top, text=\"Reload World / Restart\", command=self.reload_world).pack(side=\"right\")\n",
+              "replace_block": "        ttk.Label(top, text=\"Play\", style=\"Heading.TLabel\").pack(side=\"left\")\n        ttk.Button(top, text=\"Reload World / Restart\", command=self.reload_world).pack(side=\"right\")\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Theme scrolling transcript, command tags and title text",
+              "search_block": "        self.transcript = tk.Text(story, wrap=\"word\", state=\"disabled\", font=(\"TkDefaultFont\", 11),\n                                  padx=10, pady=10, spacing3=6)\n        self.transcript.pack(side=\"left\", fill=\"both\", expand=True)\n",
+              "replace_block": "        self.transcript = tk.Text(story, wrap=\"word\", state=\"disabled\",\n                                  padx=10, pady=10, spacing3=6)\n        style_text(self.transcript, font=FONT_STORY)\n        self.transcript.pack(side=\"left\", fill=\"both\", expand=True)\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Replace hard-coded command blue and TkDefaultFont with named theme tokens",
+              "search_block": "        self.transcript.tag_configure(\"command\", foreground=\"#4067A4\", spacing1=10)\n        self.transcript.tag_configure(\"title\", font=(\"TkDefaultFont\", 11, \"bold\"))\n",
+              "replace_block": "        self.transcript.tag_configure(\"command\", foreground=ACCENT, spacing1=10)\n        self.transcript.tag_configure(\"title\", font=FONT_HEADING)\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Emphasize command Run action",
+              "search_block": "        ttk.Button(cmd_row, text=\"Run\", command=self._submit).pack(side=\"left\", padx=(5, 0))\n",
+              "replace_block": "        ttk.Button(cmd_row, text=\"Run\", style=\"Accent.TButton\", command=self._submit).pack(side=\"left\", padx=(5, 0))\n",
+              "use_patch_indent": false
+            },
+            {
+              "description": "Style sidebar headers consistently with builder",
+              "search_block": "        ttk.Label(sidebar, text=\"Location\", font=(\"TkDefaultFont\", 11, \"bold\")).pack(anchor=\"w\")\n        ttk.Label(sidebar, textvariable=self.location, wraplength=195, justify=\"left\").pack(anchor=\"w\", pady=(4, 16))\n        ttk.Label(sidebar, text=\"Exits\", font=(\"TkDefaultFont\", 11, \"bold\")).pack(anchor=\"w\")\n        self.exit_frame = ttk.Frame(sidebar)\n        self.exit_frame.pack(fill=\"x\", pady=(4, 16))\n        ttk.Label(sidebar, text=\"Inventory\", font=(\"TkDefaultFont\", 11, \"bold\")).pack(anchor=\"w\")\n",
+              "replace_block": "        ttk.Label(sidebar, text=\"Location\", style=\"Heading.TLabel\").pack(anchor=\"w\")\n        ttk.Label(sidebar, textvariable=self.location, wraplength=195, justify=\"left\").pack(anchor=\"w\", pady=(4, 16))\n        ttk.Label(sidebar, text=\"Exits\", style=\"Heading.TLabel\").pack(anchor=\"w\")\n        self.exit_frame = ttk.Frame(sidebar)\n        self.exit_frame.pack(fill=\"x\", pady=(4, 16))\n        ttk.Label(sidebar, text=\"Inventory\", style=\"Heading.TLabel\").pack(anchor=\"w\")\n",
+              "use_patch_indent": false
+            }
+          ]
+        }
+      ],
+      "description": "Apply the established Midnight Blue Tk/ttk visual style to KleinBOTTLE Builder and Play surfaces; no world data, gameplay, or sidecar changes."
+    },
+    "inverse": {
+      "version": 2,
+      "ops": [
+        {
+          "op": "restore",
+          "path": "src/surfaces/game.py",
+          "mode": 438,
+          "from_backup": "src/surfaces/game.py"
+        },
+        {
+          "op": "restore",
+          "path": "src/surfaces/builder.py",
+          "mode": 438,
+          "from_backup": "src/surfaces/builder.py"
+        },
+        {
+          "op": "restore",
+          "path": "src/app.py",
+          "mode": 438,
+          "from_backup": "src/app.py"
+        },
+        {
+          "op": "delete",
+          "path": "src/ui_theme.py",
+          "sha256": "d649a5199593799d457ba0865fe6b9f9abf43219b14623771d604d0a7a7b3b2a"
+        }
+      ]
+    },
+    "post_state": [
+      {
+        "target": "src/app.py",
+        "kind": "file",
+        "sha256": "51b9cc04db435feffee5bbc58f8b520ed69d9a9ee8ab1a37467034a78b321249",
+        "mode": 438
+      },
+      {
+        "target": "src/surfaces/builder.py",
+        "kind": "file",
+        "sha256": "11e1f152be45357d2349bbcc1f18a8b27cf71949e8e1d0b62b168b35b76e475e",
+        "mode": 438
+      },
+      {
+        "target": "src/surfaces/game.py",
+        "kind": "file",
+        "sha256": "5c065b78fe782fdc8e630866175ece5715bb0043e26468717be39556b7940665",
+        "mode": 438
+      },
+      {
+        "target": "src/ui_theme.py",
+        "kind": "file",
+        "sha256": "d649a5199593799d457ba0865fe6b9f9abf43219b14623771d604d0a7a7b3b2a",
+        "mode": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,354 @@
+"""Tkinter world-builder surface. It depends on the builder use cases, not a game engine."""
+from __future__ import annotations
+
+from copy import deepcopy
+import json
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+from ..world_builder import WorldBuilder
+from ..world_model import ID_PATTERN, WorldValidationError, pretty
+
+
+class BuilderSurface(ttk.Frame):
+    def __init__(self, master: tk.Tk, builder: WorldBuilder):
+        super().__init__(master, padding=12)
+        self.builder = builder
+        self.selected_id: str | None = None
+        self._base: dict = {}
+        self._saved_signature: tuple = ()
+        self._refreshing = False
+        self.vars = {key: tk.StringVar() for key in
+                     ("id", "name", "area", "weather", "light", "sound")}
+        self.world_name = tk.StringVar(value=builder.world["name"])
+        self.start_room = tk.StringVar(value=builder.world["start_room"] or "")
+        # A surface is hosted by the application shell (Notebook); do not pack it here.
+        self._build()
+        self.refresh_tree()
+        self.new_room(ask=False)
+
+    def _build(self) -> None:
+        header = ttk.Frame(self)
+        header.pack(fill="x", pady=(0, 10))
+        ttk.Label(header, text="World:").pack(side="left")
+        ttk.Entry(header, textvariable=self.world_name, width=30).pack(side="left", padx=6)
+        ttk.Label(header, text="Start room:").pack(side="left", padx=(14, 3))
+        self.start_combo = ttk.Combobox(header, textvariable=self.start_room, width=20, state="readonly")
+        self.start_combo.pack(side="left", padx=4)
+        ttk.Button(header, text="Save World Settings", command=self.save_settings).pack(side="left", padx=8)
+        body = ttk.Panedwindow(self, orient="horizontal")
+        body.pack(fill="both", expand=True)
+        nav = ttk.Frame(body, padding=4)
+        content = ttk.Frame(body, padding=6)
+        body.add(nav, weight=1)
+        body.add(content, weight=3)
+
+        ttk.Label(nav, text="Areas / Rooms", font=("TkDefaultFont", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        self.tree = ttk.Treeview(nav, show="tree", selectmode="browse")
+        self.tree.pack(fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self._select_room)
+        controls = ttk.Frame(nav)
+        controls.pack(fill="x", pady=7)
+        ttk.Button(controls, text="New Room", command=self.new_room).pack(side="left", padx=2)
+        ttk.Button(controls, text="Delete", command=self.delete_room).pack(side="left", padx=2)
+        ttk.Button(nav, text="Import / Paste JSON...", command=self.import_dialog).pack(fill="x", pady=3)
+        ttk.Button(nav, text="Export World JSON...", command=self.export_world).pack(fill="x", pady=3)
+
+        ttk.Label(content, text="Room Editor", font=("TkDefaultFont", 13, "bold")).pack(anchor="w", pady=(0, 9))
+        top = ttk.Frame(content)
+        top.pack(fill="x", pady=2)
+        for index, (key, label, size) in enumerate((("id", "Room ID", 19), ("name", "Name", 32), ("area", "Area", 24))):
+            part = ttk.Frame(top)
+            part.pack(side="left", padx=(0, 12))
+            ttk.Label(part, text=label).pack(anchor="w")
+            entry = ttk.Entry(part, textvariable=self.vars[key], width=size)
+            entry.pack(anchor="w")
+            if key == "id":
+                self.id_entry = entry
+        ttk.Label(content, text="Description").pack(anchor="w", pady=(7, 2))
+        self.description = tk.Text(content, height=4, wrap="word", undo=True)
+        self.description.pack(fill="x")
+        ttk.Label(content, text="Exits — one per line: direction:room_id").pack(anchor="w", pady=(9, 2))
+        self.exits = tk.Text(content, height=4, wrap="none", undo=True)
+        self.exits.pack(fill="x")
+
+        environment = ttk.LabelFrame(content, text="Environment — optional text values")
+        environment.pack(fill="x", pady=(9, 2))
+        for key, title in (("weather", "Weather"), ("light", "Light"), ("sound", "Sound")):
+            part = ttk.Frame(environment)
+            part.pack(side="left", padx=6, pady=5)
+            ttk.Label(part, text=title).pack(anchor="w")
+            ttk.Entry(part, textvariable=self.vars[key], width=22).pack()
+
+        ttk.Label(content, text="Objects — JSON array (or use Add Object)").pack(anchor="w", pady=(8, 2))
+        self.objects = tk.Text(content, height=7, wrap="none", undo=True)
+        self.objects.pack(fill="both", expand=True)
+        row = ttk.Frame(content)
+        row.pack(fill="x", pady=(8, 3))
+        ttk.Button(row, text="Add Object...", command=self.add_object).pack(side="left")
+        ttk.Button(row, text="Full Room JSON...", command=self.edit_room_json).pack(side="left", padx=8)
+        ttk.Button(row, text="Save Room", command=self.save_room).pack(side="right")
+        self.status = tk.StringVar(value="Ready")
+        ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", pady=(8, 0))
+
+    def _form_signature(self) -> tuple:
+        return (tuple(self.vars[k].get() for k in ("id", "name", "area", "weather", "light", "sound")),
+                self.description.get("1.0", "end-1c"), self.exits.get("1.0", "end-1c"),
+                self.objects.get("1.0", "end-1c"))
+
+    def _guard_unsaved(self) -> bool:
+        if self._form_signature() == self._saved_signature:
+            return True
+        return messagebox.askyesno("Unsaved room edits", "Discard unsaved edits to this room?", parent=self)
+
+    @staticmethod
+    def _set_text(widget: tk.Text, value: str) -> None:
+        widget.delete("1.0", "end")
+        widget.insert("1.0", value)
+        widget.edit_modified(False)
+
+    def _populate(self, room: dict, existing: bool) -> None:
+        self._base = deepcopy(room)
+        for key in ("id", "name", "area"):
+            self.vars[key].set(room.get(key, ""))
+        self.id_entry.configure(state="readonly" if existing else "normal")
+        self._set_text(self.description, room.get("description", ""))
+        self._set_text(self.exits, "\n".join(f"{key}:{value}" for key, value in room.get("exits", {}).items()))
+        env = room.get("environment", {})
+        for key in ("weather", "light", "sound"):
+            self.vars[key].set(str(env.get(key, "")))
+        self._set_text(self.objects, pretty(room.get("objects", [])).rstrip("\n"))
+        self._saved_signature = self._form_signature()
+
+    def refresh_tree(self, focus: str | None = None) -> None:
+        self._refreshing = True
+        self.tree.delete(*self.tree.get_children())
+        rooms = sorted(self.builder.rooms(), key=lambda r: (r["area"].lower(), r["name"].lower()))
+        areas = {}
+        for room in rooms:
+            area = room["area"]
+            if area not in areas:
+                areas[area] = self.tree.insert("", "end", text=area, open=True)
+            node = self.tree.insert(areas[area], "end", iid=f"room:{room['id']}", text=room["name"])
+            if room["id"] == focus:
+                self.tree.selection_set(node)
+                self.tree.see(node)
+        self.start_combo["values"] = [""] + [room["id"] for room in rooms]
+        self.start_room.set(self.builder.world["start_room"] or "")
+        self.world_name.set(self.builder.world["name"])
+        warnings = self.builder.warnings()
+        self.status.set(f"{len(rooms)} rooms. {len(warnings)} unresolved exit reference(s).")
+        self._refreshing = False
+
+    def _select_room(self, _event=None) -> None:
+        if self._refreshing:
+            return
+        selection = self.tree.selection()
+        if not selection or not selection[0].startswith("room:"):
+            return
+        new_id = selection[0].removeprefix("room:")
+        if new_id == self.selected_id:
+            return
+        if not self._guard_unsaved():
+            self._refreshing = True
+            if self.selected_id is not None and self.tree.exists(f"room:{self.selected_id}"):
+                self.tree.selection_set(f"room:{self.selected_id}")
+            else:
+                self.tree.selection_remove(*self.tree.selection())
+            self._refreshing = False
+            return
+        self.selected_id = new_id
+        self._populate(self.builder.room(new_id), existing=True)
+
+    def new_room(self, ask: bool = True) -> None:
+        if ask and not self._guard_unsaved():
+            return
+        self.selected_id = None
+        self._refreshing = True
+        self.tree.selection_remove(*self.tree.selection())
+        self._refreshing = False
+        self._populate({"id": "", "name": "", "area": "Ungrouped", "description": "",
+                        "exits": {}, "environment": {}, "objects": []}, existing=False)
+        self.vars["name"].set("")
+        self._saved_signature = self._form_signature()
+        self.id_entry.focus_set()
+
+    def _read_form(self) -> dict:
+        room = deepcopy(self._base)
+        for key in ("id", "name", "area"):
+            room[key] = self.vars[key].get().strip()
+        room["description"] = self.description.get("1.0", "end-1c")
+        exits = {}
+        for number, line in enumerate(self.exits.get("1.0", "end-1c").splitlines(), 1):
+            if not line.strip():
+                continue
+            if ":" not in line:
+                raise WorldValidationError(f"Exit line {number} needs direction:room_id")
+            direction, target = (part.strip() for part in line.split(":", 1))
+            if not direction or not target or direction in exits:
+                raise WorldValidationError(f"Invalid or duplicate direction on exit line {number}")
+            exits[direction] = target
+        room["exits"] = exits
+        env = deepcopy(room.get("environment", {}))
+        for key in ("weather", "light", "sound"):
+            value = self.vars[key].get().strip()
+            if value:
+                env[key] = value
+            else:
+                env.pop(key, None)
+        room["environment"] = env
+        try:
+            room["objects"] = json.loads(self.objects.get("1.0", "end-1c") or "[]")
+        except json.JSONDecodeError as exc:
+            raise WorldValidationError(f"Objects JSON: {exc}") from exc
+        return room
+
+    def save_room(self) -> None:
+        try:
+            room = self._read_form()
+            self.builder.save_room(room, original_id=self.selected_id)
+        except (WorldValidationError, OSError) as exc:
+            messagebox.showerror("Cannot save room", str(exc), parent=self)
+            return
+        self.selected_id = room["id"]
+        self.refresh_tree(focus=self.selected_id)
+        self._populate(self.builder.room(self.selected_id), existing=True)
+        self.status.set(f"Saved room '{self.selected_id}' to world.json")
+
+    def delete_room(self) -> None:
+        if self.selected_id is None or not self._guard_unsaved():
+            return
+        if not messagebox.askyesno("Delete room", f"Delete '{self.selected_id}'?", parent=self):
+            return
+        try:
+            self.builder.delete_room(self.selected_id)
+        except (WorldValidationError, OSError) as exc:
+            messagebox.showerror("Cannot delete room", str(exc), parent=self)
+            return
+        self.selected_id = None
+        self.refresh_tree()
+        self.new_room(ask=False)
+
+    def save_settings(self) -> None:
+        try:
+            self.builder.settings(self.world_name.get().strip(), self.start_room.get() or None)
+        except (WorldValidationError, OSError) as exc:
+            messagebox.showerror("Cannot save settings", str(exc), parent=self)
+            return
+        self.status.set("World settings saved")
+
+    def add_object(self) -> None:
+        window = tk.Toplevel(self)
+        window.title("Add Object")
+        window.transient(self.winfo_toplevel())
+        window.grab_set()
+        window.resizable(False, False)
+        fields = {}
+        for index, (key, label) in enumerate((("id", "Object ID"), ("name", "Name"), ("kind", "Kind (item/furniture/etc)"), ("description", "Description"))):
+            ttk.Label(window, text=label).grid(row=index, column=0, padx=12, pady=7, sticky="e")
+            fields[key] = tk.StringVar()
+            ttk.Entry(window, textvariable=fields[key], width=44).grid(row=index, column=1, padx=12, pady=7)
+        fields["kind"].set("item")
+
+        def save() -> None:
+            try:
+                objs = json.loads(self.objects.get("1.0", "end-1c") or "[]")
+                if not isinstance(objs, list):
+                    raise WorldValidationError("Objects must be a JSON array")
+                obj = {key: var.get().strip() for key, var in fields.items()}
+                if not ID_PATTERN.fullmatch(obj["id"]) or not obj["name"]:
+                    raise WorldValidationError("Object ID and name are required; IDs cannot contain spaces")
+                if any(isinstance(existing, dict) and existing.get("id") == obj["id"] for existing in objs):
+                    raise WorldValidationError("Object ID already exists in this room")
+                objs.append(obj)
+                self._set_text(self.objects, pretty(objs).rstrip("\n"))
+            except (ValueError, WorldValidationError) as exc:
+                messagebox.showerror("Cannot add object", str(exc), parent=window)
+                return
+            window.destroy()
+        ttk.Button(window, text="Add", command=save).grid(row=len(fields), column=1, sticky="e", padx=12, pady=10)
+        window.bind("<Escape>", lambda _event: window.destroy())
+
+    def edit_room_json(self) -> None:
+        if self.selected_id is None:
+            messagebox.showinfo("Select a room", "Save the new room before editing its full JSON.", parent=self)
+            return
+        if not self._guard_unsaved():
+            return
+        window = tk.Toplevel(self)
+        window.title(f"Room JSON — {self.selected_id}")
+        window.geometry("750x610")
+        window.transient(self.winfo_toplevel())
+        editor = tk.Text(window, wrap="none", undo=True)
+        editor.pack(fill="both", expand=True, padx=10, pady=10)
+        self._set_text(editor, pretty(self.builder.room(self.selected_id)))
+
+        def apply() -> None:
+            try:
+                raw = json.loads(editor.get("1.0", "end-1c"))
+                self.builder.save_room(raw, original_id=self.selected_id)
+            except (ValueError, WorldValidationError, OSError) as exc:
+                messagebox.showerror("Cannot apply JSON", str(exc), parent=window)
+                return
+            room_id = self.selected_id
+            self.refresh_tree(focus=room_id)
+            self._populate(self.builder.room(room_id), existing=True)
+            window.destroy()
+        ttk.Button(window, text="Apply JSON", command=apply).pack(anchor="e", padx=10, pady=(0, 10))
+
+    def import_dialog(self) -> None:
+        if not self._guard_unsaved():
+            return
+        window = tk.Toplevel(self)
+        window.title("Import / Paste Rooms or World JSON")
+        window.geometry("830x610")
+        window.transient(self.winfo_toplevel())
+        ttk.Label(window, text="Paste a room object, list of rooms, or a {rooms: [...]} world document.").pack(anchor="w", padx=10, pady=5)
+        editor = tk.Text(window, wrap="none", undo=True)
+        editor.pack(fill="both", expand=True, padx=10, pady=5)
+        mode = tk.StringVar(value="add")
+        options = ttk.Frame(window)
+        options.pack(fill="x", padx=10, pady=5)
+        for value, label in (("add", "Add new (skip existing IDs)"),
+                             ("update", "Update matching IDs"), ("replace", "Replace whole world")):
+            ttk.Radiobutton(options, text=label, variable=mode, value=value).pack(side="left", padx=6)
+
+        def load_file() -> None:
+            path = filedialog.askopenfilename(parent=window, filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+            if path:
+                try:
+                    self._set_text(editor, Path(path).read_text(encoding="utf-8"))
+                except OSError as exc:
+                    messagebox.showerror("Cannot load file", str(exc), parent=window)
+
+        def apply() -> None:
+            if mode.get() == "replace" and not messagebox.askyesno(
+                "Replace whole world", "All existing rooms will be replaced. Continue?", parent=window
+            ):
+                return
+            try:
+                changed, skipped = self.builder.import_json(editor.get("1.0", "end-1c"), mode=mode.get())
+            except (ValueError, WorldValidationError, OSError) as exc:
+                messagebox.showerror("Import failed", str(exc), parent=window)
+                return
+            self.selected_id = None
+            self.refresh_tree()
+            self.new_room(ask=False)
+            messagebox.showinfo("Import complete", f"Imported or updated: {changed}\nSkipped: {skipped}\n"
+                                f"Unresolved exits: {len(self.builder.warnings())}", parent=self)
+            window.destroy()
+        actions = ttk.Frame(window)
+        actions.pack(fill="x", padx=10, pady=10)
+        ttk.Button(actions, text="Load JSON File...", command=load_file).pack(side="left")
+        ttk.Button(actions, text="Import", command=apply).pack(side="right")
+
+    def export_world(self) -> None:
+        path = filedialog.asksaveasfilename(parent=self, defaultextension=".json", filetypes=[("JSON", "*.json")],
+                                            initialfile="world-export.json")
+        if path:
+            try:
+                Path(path).write_text(self.builder.export_json(), encoding="utf-8")
+                self.status.set(f"Exported {path}")
+            except OSError as exc:
+                messagebox.showerror("Export failed", str(exc), parent=self)

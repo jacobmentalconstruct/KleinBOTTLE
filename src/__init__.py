@@ -1,0 +1,1 @@
+"""Standalone adventure project."""

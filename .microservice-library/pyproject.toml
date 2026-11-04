@@ -1,0 +1,16 @@
+[project]
+name = "ms-toolbox"
+version = "1.0.0"
+description = "Lean microservice toolbox — CLI and MCP surface"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+
+[project.scripts]
+ms-toolbox = "cli:main"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "B"]
+ignore = ["E501"]

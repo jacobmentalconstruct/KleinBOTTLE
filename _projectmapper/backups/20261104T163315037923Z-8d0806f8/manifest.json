@@ -1,0 +1,57 @@
+{
+  "format": "projectmapper-backup",
+  "version": 2,
+  "scope": "project",
+  "kind": "changeset",
+  "action": "project_patch.apply",
+  "operation_id": "3e72ed9b-b49c-4a00-b919-40ad8a0ba431",
+  "created_at": "2026-11-04T16:33:15.037923+00:00",
+  "files": [
+    {
+      "target": "src/ui_theme.py",
+      "stored": "0001.bin",
+      "sha256": "d649a5199593799d457ba0865fe6b9f9abf43219b14623771d604d0a7a7b3b2a",
+      "size": 4963,
+      "mode": 438
+    }
+  ],
+  "changeset": {
+    "forward": {
+      "version": 2,
+      "ops": [
+        {
+          "op": "patch",
+          "path": "src/ui_theme.py",
+          "hunks": [
+            {
+              "description": "Use Treeview (the ttk widget style name), rather than TTreeview, so room/area rows inherit the dark background and readable foreground.",
+              "search_block": "    style.configure(\"TTreeview\", background=INSET, fieldbackground=INSET,\n                    foreground=TEXT, rowheight=25, bordercolor=BORDER,\n                    borderwidth=0, font=FONT_UI)\n    style.map(\"TTreeview\", background=[(\"selected\", ACCENT)],\n              foreground=[(\"selected\", \"#FFFFFF\")])",
+              "replace_block": "    style.configure(\"Treeview\", background=INSET, fieldbackground=INSET,\n                    foreground=TEXT, rowheight=25, bordercolor=BORDER,\n                    borderwidth=0, font=FONT_UI)\n    style.map(\"Treeview\", background=[(\"selected\", ACCENT)],\n              foreground=[(\"selected\", \"#FFFFFF\")])",
+              "use_patch_indent": false
+            }
+          ]
+        }
+      ],
+      "description": "Fix the Areas / Rooms list background and selection colors using the actual ttk.Treeview style name."
+    },
+    "inverse": {
+      "version": 2,
+      "ops": [
+        {
+          "op": "restore",
+          "path": "src/ui_theme.py",
+          "mode": 438,
+          "from_backup": "src/ui_theme.py"
+        }
+      ]
+    },
+    "post_state": [
+      {
+        "target": "src/ui_theme.py",
+        "kind": "file",
+        "sha256": "053f8b91a2055ec3bf80d0db24a2e5015cd24d245c8cb480e70043a86fca9089",
+        "mode": 438
+      }
+    ]
+  }
+}
