@@ -1,0 +1,17 @@
+# KleinBOTTLE / KleinOS v0.1 — sandbox image
+# Sandbox restrictions are supplied by docker run / computer_backend.py,
+# not by this Dockerfile alone.
+FROM python:3.13-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/home/player
+
+RUN groupadd --gid 10001 player \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /bin/sh player \
+    && mkdir -p /workspace \
+    && chown player:player /workspace
+
+USER player:player
+WORKDIR /workspace
+CMD ["sleep", "infinity"]
