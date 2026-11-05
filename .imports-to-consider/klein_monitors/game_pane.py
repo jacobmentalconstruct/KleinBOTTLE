@@ -24,7 +24,6 @@ _BG   = "#010a01"
 _G    = "#00dd33"   # main green — player, invaders, bullets
 _GH   = "#88ff88"   # highlight — explosions, win text
 _GD   = "#004d18"   # dim green — grid lines, controls text
-_RED  = "#ff3322"   # invader bombs
 _HUD  = "#00aa22"   # score / lives
 
 # ── Pixel scale ───────────────────────────────────────────────────────
