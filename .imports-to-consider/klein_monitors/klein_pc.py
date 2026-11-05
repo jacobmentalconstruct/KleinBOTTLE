@@ -278,7 +278,18 @@ class KleinPC:
     def _swap(self, factory: Callable[[], tk.Widget]) -> None:
         for w in self._content.winfo_children():
             w.destroy()
-        factory().pack(fill="both", expand=True)
+        widget = factory()
+        widget.pack(fill="both", expand=True)
+        # Give keyboard focus to the first Entry or Text inside the new content
+        self._window.after(50, lambda: self._focus_first_input(widget))
+
+    @staticmethod
+    def _focus_first_input(parent: tk.Widget) -> None:
+        for w in parent.winfo_children():
+            if isinstance(w, (tk.Entry, tk.Text)):
+                w.focus_set()
+                return
+            KleinPC._focus_first_input(w)
 
     # ──────────────────────────────────────────────────────────────────
     # Navigation actions

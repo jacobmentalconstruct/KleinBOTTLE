@@ -67,8 +67,11 @@ class RetroMonitorFrame(tk.Frame):
             bd=0,
             highlightthickness=0,
             bg="#000000",
+            takefocus=0,
         )
         self._canvas.pack()
+        # Redirect clicks on the bezel border to the screen content area
+        self._canvas.bind("<Button-1>", lambda e: self.screen.focus_set())
 
         if _PILLOW and png.exists():
             self._prepare_image_bezel(png, canvas_w, canvas_h)
