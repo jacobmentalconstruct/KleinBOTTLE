@@ -133,9 +133,35 @@ class OllamaChatPane(tk.Frame):
             relief="flat", padx=8, pady=2, bd=0, cursor="hand2",
         ).pack(side="right", padx=6, pady=2)
 
-        tk.Frame(self, bg=_BORDER, height=1).pack(fill="x")
+        # Status bar — pack bottom items BEFORE the expanding transcript
+        self._status_var = tk.StringVar(value="Ready — type a message and press Enter")
+        tk.Label(
+            self, textvariable=self._status_var,
+            bg=_STATUS, fg=_FG_DIM, font=_FONT_SM,
+            anchor="w", padx=8,
+        ).pack(side="bottom", fill="x")
 
-        # Transcript
+        # Input row
+        tk.Frame(self, bg=_BORDER, height=1).pack(side="bottom", fill="x")
+        input_row = tk.Frame(self, bg=_STATUS, bd=0)
+        input_row.pack(side="bottom", fill="x")
+        self._entry = tk.Entry(
+            input_row, bg=_BG, fg=_FG, insertbackground=_FG,
+            font=_FONT, relief="flat", bd=0, highlightthickness=0,
+        )
+        self._entry.pack(side="left", fill="x", expand=True, padx=(8, 4), pady=5)
+        self._entry.bind("<Return>", lambda e: self._send())
+
+        self._send_btn = tk.Button(
+            input_row, text="SEND", command=self._send,
+            bg=_BTN_BG, fg=_FG, activebackground=_BTN_ACT,
+            activeforeground=_FG_HI, font=_FONT_B,
+            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
+        )
+        self._send_btn.pack(side="right", padx=6, pady=4)
+
+        # Transcript — fills remaining space after bottom items are reserved
+        tk.Frame(self, bg=_BORDER, height=1).pack(fill="x")
         transcript_frame = tk.Frame(self, bg=_BG)
         transcript_frame.pack(fill="both", expand=True)
 
@@ -156,34 +182,6 @@ class OllamaChatPane(tk.Frame):
         self._transcript.tag_configure("assistant", foreground=_FG,    font=_FONT)
         self._transcript.tag_configure("system",    foreground=_FG_SYS, font=_FONT_SM)
         self._transcript.tag_configure("thinking",  foreground=_FG_DIM, font=_FONT_SM)
-
-        tk.Frame(self, bg=_BORDER, height=1).pack(fill="x")
-
-        # Input row
-        input_row = tk.Frame(self, bg=_STATUS, bd=0)
-        input_row.pack(fill="x")
-        self._entry = tk.Entry(
-            input_row, bg=_BG, fg=_FG, insertbackground=_FG,
-            font=_FONT, relief="flat", bd=0, highlightthickness=0,
-        )
-        self._entry.pack(side="left", fill="x", expand=True, padx=(8, 4), pady=5)
-        self._entry.bind("<Return>", lambda e: self._send())
-
-        self._send_btn = tk.Button(
-            input_row, text="SEND", command=self._send,
-            bg=_BTN_BG, fg=_FG, activebackground=_BTN_ACT,
-            activeforeground=_FG_HI, font=_FONT_B,
-            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
-        )
-        self._send_btn.pack(side="right", padx=6, pady=4)
-
-        # Status bar
-        self._status_var = tk.StringVar(value="Ready — type a message and press Enter")
-        tk.Label(
-            self, textvariable=self._status_var,
-            bg=_STATUS, fg=_FG_DIM, font=_FONT_SM,
-            anchor="w", padx=8,
-        ).pack(fill="x", side="bottom")
 
         self._append("system",
                      f"Local Ollama chat  •  model: {self._model_var.get()}\n"
