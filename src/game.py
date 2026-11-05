@@ -58,6 +58,7 @@ class GameSession:
         self.phone: dict | None = None
         self.phone_history: list[dict] = []
         self.call_serial = 0
+        self._computer_request: dict | None = None
         self.restart()
 
     def restart(self) -> str:
@@ -66,6 +67,7 @@ class GameSession:
         self.inventory = []
         self.phone = None
         self.phone_history = []
+        self._computer_request = None
         self.call_serial += 1  # invalidate any in-flight replies after restart
         rooms = self.world["rooms"]
         self.room_id = self.world["start_room"] or (rooms[0]["id"] if rooms else None)
@@ -101,6 +103,8 @@ class GameSession:
         if any(str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing")
                for obj in objects):
             lines.append("A telephone rings relentlessly. You could 'answer phone'.")
+        if any(str(obj.get("kind", "")).casefold() == "terminal" for obj in objects):
+            lines.append("A computer terminal is available. Try 'use computer'.")
         actors = [actor for actor in room.get("actors", []) if not actor.get("hidden", False)]
         if actors:
             lines.append("Present: " + ", ".join(_name(actor) for actor in actors) + ".")
@@ -147,6 +151,8 @@ class GameSession:
         description = f"{_name(obj)}\n{obj.get('description') or 'Nothing unusual stands out.'}"
         if str(obj.get("kind", "")).casefold() == "telephone" and obj.get("ringing"):
             description += "\nIt keeps ringing. Try 'answer phone'."
+        if str(obj.get("kind", "")).casefold() == "terminal":
+            description += "\nYou can operate it. Try 'use computer'."
         return description
 
     @staticmethod
@@ -251,7 +257,40 @@ class GameSession:
                                    {"role": "assistant", "content": reply}))
         return True
 
+    def use_computer(self, query: str) -> str:
+        """Resolve a visible terminal object; the UI handles its window."""
+        room = self._room()
+        if room is None:
+            return self.look()
+        terminals = [obj for obj in room.get("objects", [])
+                     if not obj.get("hidden", False) and
+                     str(obj.get("kind", "")).casefold() == "terminal"]
+        if not terminals:
+            return "There is no computer terminal here."
+        target = query.casefold().strip()
+        if target.startswith("the "):
+            target = target[4:]
+        if target in {"computer", "terminal", "pc"}:
+            if len(terminals) != 1:
+                return "Which computer? " + ", ".join(_name(obj) for obj in terminals)
+            obj = terminals[0]
+        else:
+            obj, ambiguity = _find(terminals, query)
+            if ambiguity:
+                return ambiguity
+            if obj is None:
+                return f"No computer named '{query}' is here."
+        self._computer_request = obj
+        return f"You switch on {_name(obj)}. The KleinOS desktop appears."
+
+    def consume_computer_request(self) -> dict | None:
+        """Return one pending UI action, at most once."""
+        obj = self._computer_request
+        self._computer_request = None
+        return obj
+
     def execute(self, raw: str) -> str:
+        self._computer_request = None
         command = raw.strip()
         if not command:
             return "Enter a command, or type 'help'."
@@ -264,6 +303,8 @@ class GameSession:
             return "You're on the telephone. Say something or 'hang up'."
         if verb == "answer":
             return self.answer_phone(arg)
+        if verb == "use":
+            return self.use_computer(arg) if arg else "Use what?"
         if command.casefold() in {"pick up phone", "pick up telephone", "pick up receiver"}:
             return self.answer_phone()
         if verb in {"help", "?"}:
@@ -277,6 +318,7 @@ class GameSession:
                     "  inventory (i, inv)\n"
                     "  answer phone — local Ollama conversation\n"
                     "  hang up — end telephone call\n"
+                    "  use computer — operate a terminal in this room\n"
                     "  help (?)\n"
                     "  Reload World — restart from the builder's saved JSON")
         if verb in {"l", "look"} and not arg:

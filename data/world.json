@@ -48,6 +48,12 @@
           "name": "Wardrobe",
           "kind": "furniture",
           "description": "An old wardrobe."
+        },
+        {
+          "id": "desk_computer",
+          "name": "Desk Computer",
+          "kind": "terminal",
+          "description": "A compact computer sits beside a humming monitor."
         }
       ],
       "actors": [],

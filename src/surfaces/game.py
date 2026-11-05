@@ -7,6 +7,7 @@ import queue
 import threading
 
 from ..game import GameSession
+from .computer import ComputerWindow
 from ..ollama_phone import OllamaPhoneError, chat
 from ..world_model import WorldValidationError
 from ..ui_theme import ACCENT, FONT_HEADING, FONT_STORY, style_text
@@ -22,6 +23,7 @@ class GameSurface(ttk.Frame):
         self._phone_results: queue.Queue = queue.Queue()
         self._phone_busy = False
         self._request_serial = 0
+        self._computer_window: ComputerWindow | None = None
         self._build()
         self._render_initial()
 
@@ -100,6 +102,7 @@ class GameSurface(ttk.Frame):
 
     def run(self, command: str) -> None:
         normalized = command.strip().casefold()
+        computer_request = None
         if self.session.on_phone:
             if normalized in {"hang up", "hangup"}:
                 self._request_serial += 1  # abandon any pending model response
@@ -116,11 +119,32 @@ class GameSurface(ttk.Frame):
         else:
             self._append("> " + command, "command")
             self._append(self.session.execute(command))
+            computer_request = self.session.consume_computer_request()
             if self.session.on_phone:
                 self._append("> Hello?", "command")
                 self._ask_phone("Hello?")
         self._sync()
-        self.entry.focus_set()
+        if computer_request is not None:
+            self._open_computer()
+        else:
+            self.entry.focus_set()
+
+    def _open_computer(self) -> None:
+        """Use the tested KleinOS window without restarting the Play session."""
+        window = self._computer_window
+        if window is not None:
+            try:
+                if window.winfo_exists():
+                    window.lift()
+                    window.focus_set()
+                    return
+            except tk.TclError:
+                pass  # A previously closed window may have been destroyed.
+        try:
+            self._computer_window = ComputerWindow(self.winfo_toplevel())
+        except (tk.TclError, OSError, RuntimeError) as exc:
+            self._computer_window = None
+            self._append(f"[KleinOS unavailable] {exc}")
 
     def _ask_phone(self, speech: str) -> None:
         call_serial, model, messages = self.session.phone_payload(speech)
