@@ -51,3 +51,21 @@ class KleinGame:
 
     def create(self, parent: "tk.Widget", on_exit: "Callable[[], None]") -> "tk.Widget":
         raise NotImplementedError
+
+
+class KleinChat:
+    """
+    Base class for chat panels in the Chat sidebar section.
+
+        class MyChat(KleinChat):
+            title = "My Chat"
+
+            def create(self, parent, on_exit):
+                return MyChatPane(parent, on_exit=on_exit)
+
+    create() must return a tk.Widget that fills the content area.
+    """
+    title: str = "Chat"
+
+    def create(self, parent: "tk.Widget", on_exit: "Callable[[], None]") -> "tk.Widget":
+        raise NotImplementedError

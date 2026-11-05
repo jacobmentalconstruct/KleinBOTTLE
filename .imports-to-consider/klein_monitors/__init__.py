@@ -14,8 +14,8 @@ Quick start:
     monitors.show()
 """
 
-from klein_monitors.klein_app import KleinApp
+from klein_monitors.klein_app import KleinApp, KleinChat, KleinGame
 from klein_monitors.klein_pc import KleinPC
 from klein_monitors.monitors import KleinMonitors
 
-__all__ = ["KleinApp", "KleinPC", "KleinMonitors"]
+__all__ = ["KleinApp", "KleinChat", "KleinGame", "KleinPC", "KleinMonitors"]

@@ -20,6 +20,7 @@ if str(_PKG_PARENT) not in sys.path:
 
 import tkinter as tk
 from klein_monitors import KleinApp, KleinPC
+from klein_monitors.chat_pane import OllamaChat
 from klein_monitors.game_pane import SpaceInvaders
 
 
@@ -109,6 +110,7 @@ def main():
         root,
         apps=[InventoryApp(), StatusApp(), NotesApp()],
         games=[SpaceInvaders()],
+        chats=[OllamaChat()],
         title="KleinBOTTLE PC",
     )
     pc.show()

@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from klein_monitors.app_pane import AppPane
-from klein_monitors.klein_app import KleinApp, KleinGame
+from klein_monitors.klein_app import KleinApp, KleinChat, KleinGame
 from klein_monitors.retro_monitor_frame import RetroMonitorFrame
 from klein_monitors.terminal_pane import TerminalPane
 
@@ -75,12 +75,14 @@ class KleinPC:
         *,
         apps: Optional[list[KleinApp]] = None,
         games: Optional[list[KleinGame]] = None,
+        chats: Optional[list[KleinChat]] = None,
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
     ):
         self._root = root
         self._apps = apps or []
         self._games = games or []
+        self._chats = chats or []
         self._executor = executor
         self._active_btn: Optional[tk.Button] = None
 
@@ -158,6 +160,21 @@ class KleinPC:
             self._game_btns: list[tuple[tk.Button, KleinGame]] = []
             for game in self._games:
                 self._add_game_btn(game)
+            tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
+
+        # Chat section (only shown when chats are registered)
+        if self._chats:
+            self._chats_expanded = True
+            chats_section = tk.Frame(sb, bg=_S_BG)
+            chats_section.pack(fill="x")
+            self._chats_toggle_btn = self._nav_btn(
+                chats_section, "▼  Chat", self._toggle_chats, dim=True
+            )
+            self._chats_frame = tk.Frame(chats_section, bg=_S_BG)
+            self._chats_frame.pack(fill="x")
+            self._chat_btns: list[tuple[tk.Button, KleinChat]] = []
+            for chat in self._chats:
+                self._add_chat_btn(chat)
             tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
 
         # Settings
@@ -284,6 +301,41 @@ class KleinPC:
                 self._set_active(btn)
                 break
         self._swap(lambda g=game: g.create(self._content, on_exit=self._select_terminal))
+
+    def _add_chat_btn(self, chat: KleinChat) -> tk.Button:
+        btn = tk.Button(
+            self._chats_frame,
+            text=f"    {chat.title}",
+            command=lambda c=chat: self._select_chat(c),
+            bg=_S_BTN, fg=_S_FG,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            font=_S_FONT_SM, relief="flat", anchor="w",
+            padx=10, pady=4, bd=0, cursor="hand2",
+        )
+        btn.pack(fill="x")
+        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
+        btn.bind("<Leave>", lambda e, b=btn: b.configure(
+            bg=_S_ACT if b is self._active_btn else _S_BTN,
+            fg=_S_FG_ON if b is self._active_btn else _S_FG,
+        ))
+        self._chat_btns.append((btn, chat))
+        return btn
+
+    def _select_chat(self, chat: KleinChat) -> None:
+        for btn, c in self._chat_btns:
+            if c is chat:
+                self._set_active(btn)
+                break
+        self._swap(lambda c=chat: c.create(self._content, on_exit=self._select_terminal))
+
+    def _toggle_chats(self) -> None:
+        if self._chats_expanded:
+            self._chats_frame.pack_forget()
+            self._chats_toggle_btn.configure(text="▶  Chat")
+        else:
+            self._chats_frame.pack(fill="x", after=self._chats_toggle_btn)
+            self._chats_toggle_btn.configure(text="▼  Chat")
+        self._chats_expanded = not self._chats_expanded
 
     def _toggle_games(self) -> None:
         if self._games_expanded:
