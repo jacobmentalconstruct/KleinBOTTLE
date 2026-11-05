@@ -22,6 +22,7 @@ import tkinter as tk
 from klein_monitors import KleinApp, KleinPC
 from klein_monitors.chat_pane import OllamaChat
 from klein_monitors.game_pane import SpaceInvaders
+from klein_monitors.kb_surfaces import WorldBuilder, TextAdventure
 
 
 # ======================================================================
@@ -108,7 +109,7 @@ def main():
 
     pc = KleinPC(
         root,
-        apps=[InventoryApp(), StatusApp(), NotesApp(), OllamaChat()],
+        apps=[WorldBuilder(), TextAdventure(), OllamaChat(), InventoryApp(), StatusApp(), NotesApp()],
         games=[SpaceInvaders()],
         title="KleinBOTTLE PC",
     )
