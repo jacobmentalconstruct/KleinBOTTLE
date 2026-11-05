@@ -172,7 +172,7 @@ class WorldBuilder(KleinChat):
 
 
 class TextAdventure(KleinChat):
-    title = "Play"
+    title = "KleinBOTTLE"
 
     def __init__(self, world_path: Path = _DEFAULT_WORLD):
         self._world_path = world_path

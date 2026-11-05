@@ -59,8 +59,8 @@ def main():
 
     pc = KleinPC(
         root,
-        apps=[WorldBuilder(), TextAdventure(), OllamaChat(), NotesApp()],
-        games=[SpaceInvaders()],
+        apps=[WorldBuilder(), OllamaChat(), NotesApp()],
+        games=[TextAdventure(), SpaceInvaders()],
         title="KleinBOTTLE PC",
     )
     pc.show()

@@ -74,7 +74,7 @@ class KleinPC:
         root: tk.Misc,
         *,
         apps: Optional[list] = None,
-        games: Optional[list[KleinGame]] = None,
+        games: Optional[list] = None,
         chats: Optional[list[KleinChat]] = None,
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
@@ -157,7 +157,7 @@ class KleinPC:
             )
             self._games_frame = tk.Frame(games_section, bg=_S_BG)
             self._games_frame.pack(fill="x")
-            self._game_btns: list[tuple[tk.Button, KleinGame]] = []
+            self._game_btns: list[tuple[tk.Button, object]] = []
             for game in self._games:
                 self._add_game_btn(game)
             tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
@@ -309,7 +309,7 @@ class KleinPC:
         else:
             self._swap(lambda a=app: AppPane(self._content, app=a))
 
-    def _select_game(self, game: KleinGame) -> None:
+    def _select_game(self, game) -> None:
         for btn, g in self._game_btns:
             if g is game:
                 self._set_active(btn)
