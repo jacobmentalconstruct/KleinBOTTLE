@@ -117,6 +117,8 @@ class SpaceInvadersPane(tk.Canvas):
 
         self._base_speed = base_speed
         self._bomb_chance = bomb_chance
+        # bullet speed scales inversely with difficulty: harder = faster bullets
+        self._bullet_speed = max(11, 40 - base_speed)
 
         self._invaders: list[list] = [
             [c, r, True] for r in range(self.ROWS) for c in range(self.COLS)
@@ -237,7 +239,7 @@ class SpaceInvadersPane(tk.Canvas):
             self._fire_cd = 15
 
         # Move player bullets
-        self._bullets = [[x, y - 11] for x, y in self._bullets if y > 0]
+        self._bullets = [[x, y - self._bullet_speed] for x, y in self._bullets if y > 0]
 
         # Move invader bombs
         self._bombs = [[x, y + 5] for x, y in self._bombs if y < self.H]
@@ -355,7 +357,7 @@ class SpaceInvadersPane(tk.Canvas):
         # Invader bombs
         for bx, by in self._bombs:
             self.create_rectangle(bx - 1, by - 5, bx + 1, by + 5,
-                                  fill=_RED, outline="")
+                                  fill=_GD, outline="")
 
         # Player
         if self._state != "dead" or self._frame % 6 < 4:
