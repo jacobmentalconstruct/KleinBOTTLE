@@ -73,14 +73,14 @@ class KleinPC:
         self,
         root: tk.Misc,
         *,
-        apps: Optional[list[KleinApp]] = None,
+        apps: Optional[list] = None,
         games: Optional[list[KleinGame]] = None,
         chats: Optional[list[KleinChat]] = None,
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
     ):
         self._root = root
-        self._apps = apps or []
+        self._apps: list = apps or []
         self._games = games or []
         self._chats = chats or []
         self._executor = executor
@@ -215,7 +215,7 @@ class KleinPC:
         ))
         return btn
 
-    def _add_app_btn(self, app: KleinApp) -> tk.Button:
+    def _add_app_btn(self, app) -> tk.Button:
         btn = tk.Button(
             self._apps_frame,
             text=f"    {app.title}",
@@ -299,12 +299,15 @@ class KleinPC:
         self._set_active(self._btn_terminal)
         self._swap(lambda: TerminalPane(self._content, executor=self._executor))
 
-    def _select_app(self, app: KleinApp) -> None:
+    def _select_app(self, app) -> None:
         for btn, a in self._app_btns:
             if a is app:
                 self._set_active(btn)
                 break
-        self._swap(lambda a=app: AppPane(self._content, app=a))
+        if isinstance(app, KleinChat):
+            self._swap(lambda a=app: a.create(self._content, on_exit=self._select_terminal))
+        else:
+            self._swap(lambda a=app: AppPane(self._content, app=a))
 
     def _select_game(self, game: KleinGame) -> None:
         for btn, g in self._game_btns:

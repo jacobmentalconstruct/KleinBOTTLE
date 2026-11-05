@@ -291,7 +291,7 @@ class OllamaChatPane(tk.Frame):
 # ── KleinChat registration ────────────────────────────────────────────
 
 class OllamaChat(KleinChat):
-    title = "Ollama"
+    title = "KleinCHAT"
 
     def create(self, parent: tk.Widget, on_exit: Callable) -> tk.Widget:
         return OllamaChatPane(parent, on_exit=on_exit)
