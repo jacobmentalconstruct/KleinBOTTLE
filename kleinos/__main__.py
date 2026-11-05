@@ -1,12 +1,9 @@
 """
-klein_monitors/demo.py
+kleinos/__main__.py
 
-KleinOS demo — the in-game computer as a single unified window.
+KleinOS — the KleinBOTTLE in-game computer.
 
-Left sidebar : Terminal | Apps (expandable) | Settings
-Right panel  : active content inside a green CRT bezel
-
-    python .imports-to-consider/klein_monitors/demo.py
+    python -m kleinos
 """
 
 from __future__ import annotations
@@ -14,20 +11,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_PKG_PARENT = Path(__file__).resolve().parent.parent
-if str(_PKG_PARENT) not in sys.path:
-    sys.path.insert(0, str(_PKG_PARENT))
+# Add KleinBOTTLE root to sys.path so "from src.X" imports work.
+_KB_ROOT = Path(__file__).resolve().parent.parent
+if str(_KB_ROOT) not in sys.path:
+    sys.path.insert(0, str(_KB_ROOT))
 
 import tkinter as tk
-from klein_monitors import KleinApp, KleinPC
-from klein_monitors.chat_pane import OllamaChat
-from klein_monitors.game_pane import SpaceInvaders
-from klein_monitors.kb_surfaces import WorldBuilder, TextAdventure
-
-
-# ======================================================================
-# Bundled apps
-# ======================================================================
+from kleinos import KleinApp, KleinPC
+from kleinos.chat_pane import OllamaChat
+from kleinos.game_pane import SpaceInvaders
+from kleinos.kb_surfaces import WorldBuilder, TextAdventure
 
 
 class NotesApp(KleinApp):
@@ -59,10 +52,6 @@ class NotesApp(KleinApp):
         self._notes.clear()
         return "All notes cleared."
 
-
-# ======================================================================
-# Entry point
-# ======================================================================
 
 def main():
     root = tk.Tk()

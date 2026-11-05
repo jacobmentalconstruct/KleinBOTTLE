@@ -8,7 +8,7 @@ Creates a tk.Toplevel with two side-by-side RetroMonitorFrames:
   - Right (green): TerminalPane wired to an optional command executor
 
 Usage:
-    from klein_monitors import KleinMonitors, KleinApp
+    from kleinos import KleinMonitors, KleinApp
 
     class InventoryApp(KleinApp):
         title = "Inventory"
@@ -25,10 +25,10 @@ from __future__ import annotations
 import tkinter as tk
 from typing import Callable, Optional
 
-from klein_monitors.app_pane import AppPane
-from klein_monitors.klein_app import KleinApp
-from klein_monitors.retro_monitor_frame import RetroMonitorFrame
-from klein_monitors.terminal_pane import TerminalPane
+from kleinos.app_pane import AppPane
+from kleinos.klein_app import KleinApp
+from kleinos.retro_monitor_frame import RetroMonitorFrame
+from kleinos.terminal_pane import TerminalPane
 
 _BG = "#050508"
 

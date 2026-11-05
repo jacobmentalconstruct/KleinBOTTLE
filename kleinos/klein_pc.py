@@ -19,7 +19,7 @@ CRT bezel.
     └────────────────────────────────────────────────────────────┘
 
 Usage:
-    from klein_monitors import KleinPC, KleinApp
+    from kleinos import KleinPC, KleinApp
 
     pc = KleinPC(root, apps=[MyApp()])
     pc.show()
@@ -31,10 +31,10 @@ import tkinter as tk
 from pathlib import Path
 from typing import Callable, Optional
 
-from klein_monitors.app_pane import AppPane
-from klein_monitors.klein_app import KleinApp, KleinChat, KleinGame
-from klein_monitors.retro_monitor_frame import RetroMonitorFrame
-from klein_monitors.terminal_pane import TerminalPane
+from kleinos.app_pane import AppPane
+from kleinos.klein_app import KleinApp, KleinChat, KleinGame
+from kleinos.retro_monitor_frame import RetroMonitorFrame
+from kleinos.terminal_pane import TerminalPane
 
 _ASSETS = Path(__file__).parent / "assets"
 

@@ -20,7 +20,7 @@ import threading
 import tkinter as tk
 from typing import Callable, Optional
 
-from klein_monitors.klein_app import KleinChat
+from kleinos.klein_app import KleinChat
 
 # ── Palette (matches game_pane green monochrome) ─────────────────────
 _BG      = "#010a01"

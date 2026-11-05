@@ -16,7 +16,7 @@ import tkinter as tk
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from klein_monitors.klein_app import KleinApp
+    from kleinos.klein_app import KleinApp
 
 _BG       = "#010a01"
 _CHROME   = "#003311"

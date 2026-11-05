@@ -1,5 +1,5 @@
 """
-klein_monitors/kb_surfaces.py
+kleinos/kb_surfaces.py
 
 Wrappers that host KleinBOTTLE's BuilderSurface and GameSurface inside
 the KleinOS monitor, re-themed with the green phosphor palette.
@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 # ── Resolve KleinBOTTLE project root ─────────────────────────────────
-# This file: .imports-to-consider/klein_monitors/kb_surfaces.py
-# KleinBOTTLE root: ../../..  (three levels up)
-_KB_ROOT = Path(__file__).resolve().parent.parent.parent
+# This file: kleinos/kb_surfaces.py
+# KleinBOTTLE root: ..  (one level up)
+_KB_ROOT = Path(__file__).resolve().parent.parent
 _KB_SRC  = str(_KB_ROOT)          # add to sys.path so "from src.X import Y" works
 
 _DEFAULT_WORLD = _KB_ROOT / "data" / "world.json"
@@ -61,7 +61,7 @@ def _patch_ui_theme() -> None:
     _ensure_path()
     try:
         import src.ui_theme as _ui   # type: ignore[import]
-        from klein_monitors import klein_theme as _kt
+        from kleinos import klein_theme as _kt
         _ui.BACKGROUND = _kt.BG
         _ui.INSET      = _kt.INSET
         _ui.SURFACE    = _kt.SURFACE
@@ -81,7 +81,7 @@ _ui_patched = False
 
 def _apply_theme(root: tk.Misc) -> None:
     global _ui_patched
-    from klein_monitors import klein_theme
+    from kleinos import klein_theme
     klein_theme.apply(root)
     if not _ui_patched:
         _patch_ui_theme()
@@ -158,7 +158,7 @@ class KleinAdventurePane(tk.Frame):
 
 # ── KleinChat registrations ───────────────────────────────────────────
 
-from klein_monitors.klein_app import KleinChat  # noqa: E402
+from kleinos.klein_app import KleinChat  # noqa: E402
 
 
 class WorldBuilder(KleinChat):

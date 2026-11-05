@@ -15,7 +15,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import Callable, Optional
 
-from klein_monitors.klein_app import KleinGame
+from kleinos.klein_app import KleinGame
 
 _SAVE_PATH = Path(__file__).parent / "assets" / "highscore.json"
 

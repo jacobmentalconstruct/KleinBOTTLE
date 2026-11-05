@@ -1,4 +1,12 @@
-"""Thin application shell. The editor and game are separate surfaces."""
+"""
+DEPRECATED — entry point moved to kleinos/__main__.py.
+
+Run the game with:
+    py -m kleinos        (Windows)
+    python3 -m kleinos   (Unix)
+
+This file is kept only for git history. Do not use it.
+"""
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk

@@ -2,3 +2,8 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+
+# Scaffold / tooling dirs (not part of the game)
+.imports-to-consider/
+.microservice-library/
+.project-mapper/
