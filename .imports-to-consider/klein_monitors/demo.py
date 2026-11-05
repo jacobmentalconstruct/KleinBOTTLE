@@ -29,45 +29,6 @@ from klein_monitors.kb_surfaces import WorldBuilder, TextAdventure
 # Bundled apps
 # ======================================================================
 
-class InventoryApp(KleinApp):
-    title = "Inventory"
-
-    def __init__(self):
-        self._items = ["Ancient Amulet", "Iron Skeleton Key", "Brass Lantern"]
-        self._gold = 42
-
-    def commands(self):
-        return [
-            ("List items",  self._list),
-            ("Check gold",  self._gold_check),
-            ("Examine bag", self._examine),
-        ]
-
-    def _list(self):
-        if not self._items:
-            return "Your inventory is empty."
-        return "You are carrying:\n" + "\n".join(f"  • {i}" for i in self._items)
-
-    def _gold_check(self):
-        return f"You have {self._gold} gold coins."
-
-    def _examine(self):
-        return (
-            "A well-worn leather satchel, its brass clasp tarnished with age.\n"
-            "It smells faintly of old wood and candle wax."
-        )
-
-
-class StatusApp(KleinApp):
-    title = "Character Status"
-
-    def commands(self):
-        return [
-            ("Health",   lambda: "HP: 18 / 20   Status: Healthy"),
-            ("Location", lambda: "You are in the Study.\nA desk sits against the north wall."),
-            ("Quests",   lambda: "Active quest: none.\nTalk to someone to begin an adventure."),
-        ]
-
 
 class NotesApp(KleinApp):
     title = "Notes"
@@ -109,7 +70,7 @@ def main():
 
     pc = KleinPC(
         root,
-        apps=[WorldBuilder(), TextAdventure(), OllamaChat(), InventoryApp(), StatusApp(), NotesApp()],
+        apps=[WorldBuilder(), TextAdventure(), OllamaChat(), NotesApp()],
         games=[SpaceInvaders()],
         title="KleinBOTTLE PC",
     )
