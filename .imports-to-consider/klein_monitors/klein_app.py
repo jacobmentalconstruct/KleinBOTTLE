@@ -32,3 +32,22 @@ class KleinApp:
     def commands(self) -> list[tuple[str, Callable[[], str]]]:
         """Return a list of (label, callable) pairs."""
         return []
+
+
+class KleinGame:
+    """
+    Base class for canvas-based games in the Games sidebar section.
+
+        class MyGame(KleinGame):
+            title = "My Game"
+
+            def create(self, parent, on_exit):
+                return MyGameCanvas(parent, on_exit=on_exit)
+
+    create() must return a tk.Widget that fills the content area.
+    Call on_exit() when the player quits (e.g. ESC key).
+    """
+    title: str = "Game"
+
+    def create(self, parent: "tk.Widget", on_exit: "Callable[[], None]") -> "tk.Widget":
+        raise NotImplementedError

@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from klein_monitors.app_pane import AppPane
-from klein_monitors.klein_app import KleinApp
+from klein_monitors.klein_app import KleinApp, KleinGame
 from klein_monitors.retro_monitor_frame import RetroMonitorFrame
 from klein_monitors.terminal_pane import TerminalPane
 
@@ -74,11 +74,13 @@ class KleinPC:
         root: tk.Misc,
         *,
         apps: Optional[list[KleinApp]] = None,
+        games: Optional[list[KleinGame]] = None,
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
     ):
         self._root = root
         self._apps = apps or []
+        self._games = games or []
         self._executor = executor
         self._active_btn: Optional[tk.Button] = None
 
@@ -142,6 +144,21 @@ class KleinPC:
             self._add_app_btn(app)
 
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
+
+        # Games section (only shown when games are registered)
+        if self._games:
+            self._games_expanded = True
+            games_section = tk.Frame(sb, bg=_S_BG)
+            games_section.pack(fill="x")
+            self._games_toggle_btn = self._nav_btn(
+                games_section, "▼  Games", self._toggle_games, dim=True
+            )
+            self._games_frame = tk.Frame(games_section, bg=_S_BG)
+            self._games_frame.pack(fill="x")
+            self._game_btns: list[tuple[tk.Button, KleinGame]] = []
+            for game in self._games:
+                self._add_game_btn(game)
+            tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
 
         # Settings
         self._btn_settings = self._nav_btn(sb, "⚙  Settings", self._select_settings)
@@ -207,6 +224,25 @@ class KleinPC:
         self._app_btns.append((btn, app))
         return btn
 
+    def _add_game_btn(self, game: KleinGame) -> tk.Button:
+        btn = tk.Button(
+            self._games_frame,
+            text=f"    {game.title}",
+            command=lambda g=game: self._select_game(g),
+            bg=_S_BTN, fg=_S_FG,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            font=_S_FONT_SM, relief="flat", anchor="w",
+            padx=10, pady=4, bd=0, cursor="hand2",
+        )
+        btn.pack(fill="x")
+        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
+        btn.bind("<Leave>", lambda e, b=btn: b.configure(
+            bg=_S_ACT if b is self._active_btn else _S_BTN,
+            fg=_S_FG_ON if b is self._active_btn else _S_FG,
+        ))
+        self._game_btns.append((btn, game))
+        return btn
+
     def _set_active(self, btn: Optional[tk.Button]) -> None:
         if self._active_btn:
             self._active_btn.configure(bg=_S_BTN, fg=_S_FG)
@@ -241,6 +277,22 @@ class KleinPC:
                 self._set_active(btn)
                 break
         self._swap(lambda a=app: AppPane(self._content, app=a))
+
+    def _select_game(self, game: KleinGame) -> None:
+        for btn, g in self._game_btns:
+            if g is game:
+                self._set_active(btn)
+                break
+        self._swap(lambda g=game: g.create(self._content, on_exit=self._select_terminal))
+
+    def _toggle_games(self) -> None:
+        if self._games_expanded:
+            self._games_frame.pack_forget()
+            self._games_toggle_btn.configure(text="▶  Games")
+        else:
+            self._games_frame.pack(fill="x", after=self._games_toggle_btn)
+            self._games_toggle_btn.configure(text="▼  Games")
+        self._games_expanded = not self._games_expanded
 
     def _select_settings(self) -> None:
         self._set_active(self._btn_settings)
