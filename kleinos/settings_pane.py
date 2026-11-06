@@ -13,19 +13,14 @@ from typing import Callable, Optional
 from kleinos import audio as _audio
 from kleinos import config as _config
 
-_BG          = "#010a01"
-_CHROME      = "#003311"
-_BORDER      = "#005522"
-_BTN_BG      = "#0a2010"
-_BTN_ACT     = "#0d3a1a"
-_BTN_TAB_ON  = "#0d3a1a"
-_BTN_TAB_OFF = "#050e05"
-_BTN_DEL     = "#2a0808"
-_BTN_DEL_ACT = "#4a1010"
-_STATUS      = "#050e05"
-_TEXT_FG     = "#00dd33"
-_TEXT_DIM    = "#1a4a1a"
-_TEXT_HI     = "#aaffaa"
+from kleinos.palette import (
+    BG as _BG, CHROME as _CHROME, BORDER as _BORDER,
+    BTN_BG as _BTN_BG, BTN_ACT as _BTN_ACT,
+    BTN_DEL as _BTN_DEL, BTN_DEL_A as _BTN_DEL_ACT,
+    BG2 as _STATUS, FG_ON as _TEXT_FG, FG_DIM as _TEXT_DIM, FG_HI as _TEXT_HI,
+)
+_BTN_TAB_ON  = _BTN_ACT
+_BTN_TAB_OFF = _STATUS
 _FONT        = ("Consolas", 9)
 _FONT_B      = ("Consolas", 9, "bold")
 _FONT_SM     = ("Consolas", 8)

@@ -22,12 +22,10 @@ import threading
 import tkinter as tk
 from typing import Callable, Optional
 
-_BG      = "#010a01"
-_FG      = "#00dd33"
-_DIM     = "#006618"
-_PROMPT  = "#00ff44"
-_CHROME  = "#003311"
-_BORDER  = "#005522"
+from kleinos.palette import (
+    BG as _BG, FG_ON as _FG, FG as _DIM, FG_PROMPT as _PROMPT,
+    CHROME as _CHROME, BORDER as _BORDER,
+)
 _FONT    = ("Consolas", 9)
 _FONT_SB = ("Consolas", 9, "bold")
 

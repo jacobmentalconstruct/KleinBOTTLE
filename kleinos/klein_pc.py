@@ -43,49 +43,18 @@ _ASSETS = Path(__file__).parent / "assets"
 _LAYOUT_PATH = Path(__file__).resolve().parent.parent / "data" / "kleinos_layout.json"
 
 # ── Sidebar palette ──────────────────────────────────────────────────
-_S_BG      = "#050a05"
-_S_HEAD    = "#081208"
-_S_BTN     = "#050a05"
-_S_HOV     = "#0d2010"
-_S_ACT     = "#0a3a0a"
-_S_FG      = "#3a7a3a"
-_S_FG_ON   = "#00dd33"
-_S_FG_DIM  = "#1a4a1a"
-_S_SEP     = "#0a180a"
+from kleinos.palette import (
+    BG2 as _S_BG, HEAD as _S_HEAD, HOV as _S_HOV, ACT as _S_ACT,
+    FG as _S_FG, FG_ON as _S_FG_ON, FG_DIM as _S_FG_DIM, SEP as _S_SEP,
+    BG as _CONTENT_BG,
+)
+_S_BTN     = _S_BG
 _S_FONT    = ("Consolas", 9)
 _S_FONT_H  = ("Consolas", 10, "bold")
 _S_FONT_SM = ("Consolas", 8)
 _S_WIDTH   = 148
 
-_CONTENT_BG = "#010a01"
-_WIN_BG     = "#050508"
-
-# ── Multi-palette support ────────────────────────────────────────────
-_PALETTES: dict[str, dict[str, str]] = {
-    "green": dict(bg="#050a05", head="#081208", hov="#0d2010", act="#0a3a0a",
-                  fg="#3a7a3a", fg_on="#00dd33", fg_dim="#1a4a1a", sep="#0a180a"),
-    "amber": dict(bg="#100800", head="#180d00", hov="#201400", act="#301c00",
-                  fg="#7a5010", fg_on="#ffaa00", fg_dim="#3a2808", sep="#180e00"),
-    "white": dict(bg="#050505", head="#0a0a0a", hov="#1a1a1a", act="#2a2a2a",
-                  fg="#606060", fg_on="#d0d0d0", fg_dim="#303030", sep="#0f0f0f"),
-    "blue":  dict(bg="#000810", head="#000e1a", hov="#001022", act="#001a33",
-                  fg="#2a4a7a", fg_on="#66aaff", fg_dim="#1a2a4a", sep="#000810"),
-    "red":   dict(bg="#0a0000", head="#120000", hov="#1a0000", act="#2a0000",
-                  fg="#7a1a1a", fg_on="#ff4444", fg_dim="#3a0808", sep="#0f0000"),
-}
-
-
-def _apply_palette(name: str) -> None:
-    global _S_BG, _S_HEAD, _S_BTN, _S_HOV, _S_ACT, _S_FG, _S_FG_ON, _S_FG_DIM, _S_SEP
-    p = _PALETTES.get(name, _PALETTES["green"])
-    _S_BG = _S_BTN = p["bg"]
-    _S_HEAD   = p["head"]
-    _S_HOV    = p["hov"]
-    _S_ACT    = p["act"]
-    _S_FG     = p["fg"]
-    _S_FG_ON  = p["fg_on"]
-    _S_FG_DIM = p["fg_dim"]
-    _S_SEP    = p["sep"]
+_WIN_BG = "#050508"   # outer CRT bezel — constant across palettes
 
 
 # ── Tooltip ──────────────────────────────────────────────────────────
@@ -112,8 +81,8 @@ class _Tooltip:
         tk.Label(
             self._win,
             text=self._text,
-            bg="#0a1a0a",
-            fg="#aaffaa",
+            bg=_S_HEAD,
+            fg=_S_FG_ON,
             font=("Consolas", 8),
             relief="flat",
             padx=8,
@@ -157,7 +126,6 @@ class KleinPC:
         layout_path: Path = _LAYOUT_PATH,
     ):
         _startup_cfg = _config.load()
-        _apply_palette(_startup_cfg.get("palette", "green"))
         _audio.configure(_startup_cfg)
         self._root = root
         self._apps: list = apps or []

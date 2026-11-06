@@ -18,15 +18,11 @@ from typing import TYPE_CHECKING, Callable, Optional
 if TYPE_CHECKING:
     from kleinos.klein_app import KleinApp
 
-_BG       = "#010a01"
-_CHROME   = "#003311"
-_BORDER   = "#005522"
-_BTN_BG   = "#0a2010"
-_BTN_ACT  = "#0d3a1a"
-_BTN_SEL  = "#0a4020"   # keyboard-selected button
-_BTN_SEL_FG = "#aaffaa"
-_TEXT_FG  = "#00dd33"
-_STATUS   = "#050e05"
+from kleinos.palette import (
+    BG as _BG, CHROME as _CHROME, BORDER as _BORDER,
+    BTN_BG as _BTN_BG, BTN_ACT as _BTN_ACT, BTN_SEL as _BTN_SEL,
+    FG_HI as _BTN_SEL_FG, FG_ON as _TEXT_FG, BG2 as _STATUS,
+)
 _FONT     = ("Consolas", 9)
 _FONT_TTL = ("Consolas", 10, "bold")
 

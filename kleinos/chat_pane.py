@@ -22,17 +22,13 @@ from typing import Callable, Optional
 
 from kleinos.klein_app import KleinChat
 
-# ── Palette (matches game_pane green monochrome) ─────────────────────
-_BG      = "#010a01"
-_CHROME  = "#003311"
-_BORDER  = "#005522"
-_BTN_BG  = "#0a2010"
-_BTN_ACT = "#0d3a1a"
-_FG      = "#00dd33"   # main green
-_FG_DIM  = "#1a4a1a"
-_FG_HI   = "#88ff88"   # bright green — user messages
-_FG_SYS  = "#005522"   # very dim — system notices
-_STATUS  = "#050e05"
+from kleinos.palette import (
+    BG as _BG, CHROME as _CHROME, BORDER as _BORDER,
+    BTN_BG as _BTN_BG, BTN_ACT as _BTN_ACT,
+    FG_ON as _FG, FG_DIM as _FG_DIM, FG_HI as _FG_HI,
+    BG2 as _STATUS,
+)
+_FG_SYS = _BORDER
 _FONT    = ("Consolas", 9)
 _FONT_B  = ("Consolas", 9, "bold")
 _FONT_SM = ("Consolas", 8)
