@@ -25,25 +25,35 @@ from kleinos.mahisland import MAHisLAND
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
 _SPLASH_PATH = _KB_ROOT / "data" / "splash.png"
-_SPLASH_W    = 320   # target display width (matches natural image size)
-_SPLASH_H    = 240   # target display height
+_SPLASH_W = 320   # max display width for splash
+_SPLASH_H = 240   # max display height for splash
 
 try:
     from PIL import Image as _PilImage, ImageTk as _PilImageTk  # type: ignore[import-untyped]
     _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
-    def _load_splash_photo():
-        img  = _PilImage.open(_SPLASH_PATH)
+    _PIL_OK = True
+except ImportError:
+    _PilImage = _PilImageTk = None  # type: ignore[assignment]
+    _NEAREST = 0
+    _PIL_OK = False
+
+
+def _make_splash_photo():
+    """Load splash.png and return (PhotoImage, w, h). Call after Tk root exists."""
+    if not _PIL_OK or not _SPLASH_PATH.exists():
+        return None, 0, 0
+    try:
+        img = _PilImage.open(_SPLASH_PATH)  # type: ignore[union-attr]
         iw, ih = img.size
         scale = min(_SPLASH_W / iw, _SPLASH_H / ih)
         nw, nh = int(iw * scale), int(ih * scale)
         img   = img.resize((nw, nh), _NEAREST)
         gray  = img.convert("L")
         zeros = gray.point(lambda _: 0)
-        tinted = _PilImage.merge("RGB", (zeros, gray, zeros))
-        return _PilImageTk.PhotoImage(tinted), nw, nh
-    _SPLASH_PHOTO, _SPLASH_NW, _SPLASH_NH = _load_splash_photo()
-except Exception:
-    _SPLASH_PHOTO, _SPLASH_NW, _SPLASH_NH = None, 0, 0
+        tinted = _PilImage.merge("RGB", (zeros, gray, zeros))  # type: ignore[union-attr]
+        return _PilImageTk.PhotoImage(tinted), nw, nh  # type: ignore[union-attr]
+    except Exception:
+        return None, 0, 0
 
 
 # ── Apps that live inside the in-game PC ─────────────────────────────
@@ -86,31 +96,32 @@ class TitleScreen(tk.Canvas):
         super().__init__(parent, bg=_BG, highlightthickness=0)
         self._on_start = on_start
         self._blink_visible = True
+        # Load splash lazily here — Tk root already exists at this point
+        self._splash_photo, self._splash_nw, self._splash_nh = _make_splash_photo()
         self.bind("<Configure>",  self._redraw)
-        self.bind("<Return>",     lambda _e: self._start())
-        self.bind("<space>",      lambda _e: self._start())
-        self.bind("<Button-1>",   lambda _e: self._start())
+        self.bind("<Return>",     lambda _: self._start())
+        self.bind("<space>",      lambda _: self._start())
+        self.bind("<Button-1>",   lambda _: self._start())
         self.focus_set()
         self._blink_id: str = self.after(650, self._blink)
 
-    def _redraw(self, _event=None) -> None:
+    def _redraw(self, _=None) -> None:
         self.delete("all")
         w = self.winfo_width()  or 960
         h = self.winfo_height() or 680
         cx, cy = w // 2, h // 2
 
-        if _SPLASH_PHOTO is not None:
-            # Image centered above title; shift text block down accordingly
-            img_top = cy - _SPLASH_NH - 80
-            self.create_image(cx - _SPLASH_NW // 2, img_top,
-                              anchor="nw", image=_SPLASH_PHOTO)
-            title_y    = cy + 10
-            tagline_y  = cy + 60
-            prompt_y   = cy + 100
+        if self._splash_photo is not None:
+            img_top = cy - self._splash_nh - 80
+            self.create_image(cx - self._splash_nw // 2, img_top,
+                              anchor="nw", image=self._splash_photo)
+            title_y   = cy + 10
+            tagline_y = cy + 60
+            prompt_y  = cy + 100
         else:
-            title_y    = cy - 70
-            tagline_y  = cy - 14
-            prompt_y   = cy + 34
+            title_y   = cy - 70
+            tagline_y = cy - 14
+            prompt_y  = cy + 34
 
         self.create_text(cx, title_y,
                          text="KleinBOTTLE",

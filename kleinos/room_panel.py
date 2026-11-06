@@ -45,7 +45,8 @@ _FG        = "#00cc33"
 _DIM       = "#005500"
 _CANVAS_BG = "#000000"
 
-IMG_H = 200  # fixed banner height in pixels
+_IMG_ASPECT = 240 / 320   # 4:3 — height = width × this
+_IMG_MAX_H  = 400         # never taller than this (leaves room for transcript)
 
 
 def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
@@ -112,9 +113,9 @@ class RoomImagePanel(tk.Frame):
         )
         self._regen_btn.pack(side="right")
 
-        # ── Image canvas — fills column width, fixed height ──────────
+        # ── Image canvas — fills column width, height tracks aspect ratio ──
         self._canvas = tk.Canvas(
-            self, height=IMG_H,
+            self, height=200,                 # initial placeholder; resized on Configure
             bg=_CANVAS_BG, highlightthickness=1, highlightbackground=_BORDER,
         )
         self._canvas.pack(fill="x", padx=4, pady=(0, 4))
@@ -140,7 +141,15 @@ class RoomImagePanel(tk.Frame):
 
     # ── Resize ────────────────────────────────────────────────────────
 
+    def _canvas_h(self) -> int:
+        """Desired canvas height: width × 4:3 aspect, capped at _IMG_MAX_H."""
+        w = self._canvas.winfo_width() or 320
+        return min(int(w * _IMG_ASPECT), _IMG_MAX_H)
+
     def _on_resize(self, _=None) -> None:
+        new_h = self._canvas_h()
+        if self._canvas.winfo_height() != new_h:
+            self._canvas.configure(height=new_h)
         if self._current_path and self._current_path.exists():
             self._display(self._current_path)
 
@@ -217,7 +226,7 @@ class RoomImagePanel(tk.Frame):
                 self.after(50, lambda: self._display(path))
                 return
             img = _PilImage.open(path)  # type: ignore[union-attr]
-            tinted = _green_tint(img, w, IMG_H)
+            tinted = _green_tint(img, w, self._canvas_h())
             self._photo = _PilImageTk.PhotoImage(tinted)  # type: ignore[union-attr]
             self._canvas.delete("all")
             self._canvas.create_image(0, 0, anchor="nw", image=self._photo)
@@ -229,7 +238,7 @@ class RoomImagePanel(tk.Frame):
         self._canvas.delete("all")
         w = self._canvas.winfo_width() or 400
         self._canvas.create_text(
-            w // 2, IMG_H // 2,
+            w // 2, self._canvas_h() // 2,
             text=text, fill=_FG, font=("Consolas", 9),
             width=w - 20,
         )
