@@ -1,11 +1,19 @@
 """
 kleinos/room_panel.py
 
-Room image panel for the KleinBOTTLE text adventure.
-Shows a 320×240 retro pixel art background per room, generated on demand
-via the local ComfyUI pipeline and displayed with a green phosphor tint.
+Full-width room banner for the KleinBOTTLE text adventure.
 
-Images are cached in data/rooms/<room_id>.png.
+Layout (packed above GameSurface):
+  ┌──────────────────────────────────────── ↺ regen ┐
+  │  ROOM NAME                                       │  ← title row
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  [generated image — scales to column width]      │  ← 200px tall banner
+  │                                                  │
+  └──────────────────────────────────────────────────┘
+
+Images are cached in data/rooms/<room_id>.png and displayed with a
+green phosphor tint (grayscale → green channel).
 """
 
 from __future__ import annotations
@@ -31,11 +39,13 @@ _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
 _PIPELINE_ROOT = Path(r"C:\Jacob\Apps & Tools\image-generation-pipeline")
 _ROOMS_DIR = Path(__file__).resolve().parent.parent / "data" / "rooms"
 
-_BG      = "#010a01"
-_BORDER  = "#003300"
-_FG      = "#00cc33"
-_DIM     = "#005500"
+_BG        = "#010a01"
+_BORDER    = "#003300"
+_FG        = "#00cc33"
+_DIM       = "#005500"
 _CANVAS_BG = "#000000"
+
+IMG_H = 200  # fixed banner height in pixels
 
 
 def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
@@ -48,7 +58,7 @@ def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
 
 
 def _green_tint(img: object, w: int, h: int) -> object:
-    """Resize to w×h, convert to grayscale, map into green channel only."""
+    """Resize to w×h and map into green channel for phosphor effect."""
     img = img.resize((w, h), _NEAREST)  # type: ignore[union-attr]
     gray = img.convert("L")  # type: ignore[union-attr]
     zeros = gray.point(lambda _: 0)
@@ -56,50 +66,46 @@ def _green_tint(img: object, w: int, h: int) -> object:
 
 
 class RoomImagePanel(tk.Frame):
-    PANEL_W = 328   # 320 image + 4px padding each side
-    IMG_W   = 320
-    IMG_H   = 240
+    """Full-width banner: title row on top, image canvas below."""
 
     def __init__(self, parent: tk.Widget, **kw):
-        super().__init__(parent, bg=_BG, width=self.PANEL_W,
+        super().__init__(parent, bg=_BG,
                          highlightthickness=1, highlightbackground=_BORDER, **kw)
-        self.pack_propagate(False)
 
-        self._room_id:    Optional[str] = None
-        self._area:       str = ""
-        self._description: str = ""
-        self._photo:      Optional[object] = None  # keep ImageTk reference
-        self._generating: bool = False
+        self._room_id:     Optional[str]  = None
+        self._area:        str            = ""
+        self._description: str            = ""
+        self._photo:       Optional[object] = None   # hold ImageTk ref
+        self._current_path: Optional[Path] = None
+        self._generating:  bool           = False
 
-        # Room name label
+        # ── Title row ────────────────────────────────────────────────
+        title_row = tk.Frame(self, bg=_BG)
+        title_row.pack(fill="x", padx=6, pady=(4, 2))
+
         self._name_var = tk.StringVar(value="")
-        tk.Label(self, textvariable=self._name_var,
-                 bg=_BG, fg=_FG,
-                 font=("Consolas", 10, "bold"),
-                 anchor="w").pack(fill="x", padx=6, pady=(6, 2))
+        tk.Label(
+            title_row, textvariable=self._name_var,
+            bg=_BG, fg=_FG, font=("Consolas", 11, "bold"), anchor="w",
+        ).pack(side="left")
 
-        # Image canvas
-        self._canvas = tk.Canvas(
-            self, width=self.IMG_W, height=self.IMG_H,
-            bg=_CANVAS_BG, highlightthickness=1, highlightbackground=_BORDER,
-        )
-        self._canvas.pack(padx=4, pady=2)
-        self._canvas.create_text(
-            self.IMG_W // 2, self.IMG_H // 2,
-            text="", fill=_FG, font=("Consolas", 9),
-            tags="status",
-        )
-
-        # Regen button
         self._regen_btn = tk.Button(
-            self, text="↺ regen",
+            title_row, text="↺ regen",
             bg=_BG, fg=_DIM,
             activebackground="#001a00", activeforeground=_FG,
             relief="flat", font=("Consolas", 8),
             command=self._regen,
             state="disabled",
         )
-        self._regen_btn.pack(anchor="e", padx=6, pady=(2, 6))
+        self._regen_btn.pack(side="right")
+
+        # ── Image canvas — fills column width, fixed height ──────────
+        self._canvas = tk.Canvas(
+            self, height=IMG_H,
+            bg=_CANVAS_BG, highlightthickness=1, highlightbackground=_BORDER,
+        )
+        self._canvas.pack(fill="x", padx=4, pady=(0, 4))
+        self._canvas.bind("<Configure>", self._on_resize)
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -107,8 +113,8 @@ class RoomImagePanel(tk.Frame):
                     description: str, area: str = "") -> None:
         if room_id == self._room_id:
             return
-        self._room_id    = room_id
-        self._area       = area
+        self._room_id     = room_id
+        self._area        = area
         self._description = description
         self._name_var.set(room_name.upper())
         self._regen_btn.configure(state="normal")
@@ -119,6 +125,12 @@ class RoomImagePanel(tk.Frame):
         else:
             self._start_generation(room_id, room_name, description, area)
 
+    # ── Resize ────────────────────────────────────────────────────────
+
+    def _on_resize(self, _=None) -> None:
+        if self._current_path and self._current_path.exists():
+            self._display(self._current_path)
+
     # ── Generation ────────────────────────────────────────────────────
 
     def _regen(self) -> None:
@@ -127,6 +139,7 @@ class RoomImagePanel(tk.Frame):
         img_path = _ROOMS_DIR / f"{self._room_id}.png"
         if img_path.exists():
             img_path.unlink()
+        self._current_path = None
         self._start_generation(
             self._room_id,
             self._name_var.get().title(),
@@ -155,8 +168,8 @@ class RoomImagePanel(tk.Frame):
 
             prompt = _build_room_prompt(room_name, description, area)
             workflow, _ = build_workflow(prompt, "default")
-            prompt_id = queue_prompt(workflow, str(uuid.uuid4()))
-            result = wait_for_completion(prompt_id, timeout=300.0)
+            pid = queue_prompt(workflow, str(uuid.uuid4()))
+            result = wait_for_completion(pid, timeout=300.0)
 
             tmp_dir = _ROOMS_DIR / "_tmp"
             tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +181,7 @@ class RoomImagePanel(tk.Frame):
             else:
                 self.after(0, lambda: self._set_status("No image returned"))
         except Exception as exc:
-            msg = str(exc)[:60]
+            msg = str(exc)[:80]
             self.after(0, lambda: self._set_status(f"Error: {msg}"))
         finally:
             self._generating = False
@@ -185,18 +198,25 @@ class RoomImagePanel(tk.Frame):
             self._set_status("Pillow not installed\npip install pillow")
             return
         try:
+            w = self._canvas.winfo_width()
+            if w < 2:
+                # Canvas not yet laid out — defer one frame
+                self.after(50, lambda: self._display(path))
+                return
             img = _PilImage.open(path)  # type: ignore[union-attr]
-            tinted = _green_tint(img, self.IMG_W, self.IMG_H)
+            tinted = _green_tint(img, w, IMG_H)
             self._photo = _PilImageTk.PhotoImage(tinted)  # type: ignore[union-attr]
             self._canvas.delete("all")
             self._canvas.create_image(0, 0, anchor="nw", image=self._photo)
+            self._current_path = path
         except Exception as exc:
             self._set_status(f"Load error:\n{exc}")
 
     def _set_status(self, text: str) -> None:
         self._canvas.delete("all")
+        w = self._canvas.winfo_width() or 400
         self._canvas.create_text(
-            self.IMG_W // 2, self.IMG_H // 2,
+            w // 2, IMG_H // 2,
             text=text, fill=_FG, font=("Consolas", 9),
-            width=self.IMG_W - 20, tags="status",
+            width=w - 20,
         )

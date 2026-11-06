@@ -151,14 +151,12 @@ class KleinAdventurePane(tk.Frame):
 
             from kleinos.room_panel import RoomImagePanel
 
-            inner = tk.Frame(self, bg="#010a01")
-            inner.pack(fill="both", expand=True)
+            # Vertical layout: title+image banner on top, game surface below
+            self._room_panel = RoomImagePanel(self)
+            self._room_panel.pack(fill="x")
 
-            self._room_panel = RoomImagePanel(inner)
-            self._room_panel.pack(side="left", fill="y")
-
-            surface = GameSurface(inner, session)
-            surface.pack(side="left", fill="both", expand=True)
+            surface = GameSurface(self, session)
+            surface.pack(fill="both", expand=True)
 
             self._poll_room()
         except Exception as exc:
