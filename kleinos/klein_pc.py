@@ -329,6 +329,7 @@ class KleinPC:
             lambda i=item: self._select_item(i),
             tooltip=desc,
         )
+        btn.bind("<Button-3>", lambda e, i=item: self._show_item_menu(i, e))
         self._item_btns[item.title] = btn  # type: ignore[attr-defined]
         return btn
 
@@ -349,6 +350,7 @@ class KleinPC:
             bg=_S_ACT if b is self._active_btn else _S_BTN,
             fg=_S_FG_ON if b is self._active_btn else _S_FG,
         ))
+        btn.bind("<Button-3>", lambda e, i=item: self._show_item_menu(i, e))
         if desc:
             _Tooltip(btn, desc)
         self._item_btns[item.title] = btn  # type: ignore[attr-defined]
@@ -487,6 +489,89 @@ class KleinPC:
                     cat["_toggle_btn"].configure(text=f"{arrow}  {new_name}")
                 break
         self._save_layout()
+
+    # ──────────────────────────────────────────────────────────────────
+    # Right-click item menu
+    # ──────────────────────────────────────────────────────────────────
+
+    def _show_item_menu(self, item: object, event: tk.Event) -> None:
+        title: str = item.title  # type: ignore[attr-defined]
+
+        current_cat_id: Optional[str] = None
+        for cat in self._layout["categories"]:
+            if title in cat["items"]:
+                current_cat_id = cat["id"]
+                break
+
+        menu = tk.Menu(
+            self._window, tearoff=0,
+            bg=_S_BTN, fg=_S_FG_ON,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            relief="flat", bd=1,
+        )
+        sub = tk.Menu(
+            menu, tearoff=0,
+            bg=_S_BTN, fg=_S_FG_ON,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            relief="flat", bd=1,
+        )
+
+        has_dest = False
+        if current_cat_id is not None:
+            sub.add_command(
+                label="  Top level",
+                command=lambda: self._move_item(title, "__top__"),
+            )
+            has_dest = True
+        for cat in self._layout["categories"]:
+            if cat["id"] != current_cat_id:
+                sub.add_command(
+                    label=f"  {cat['label']}",
+                    command=lambda cid=cat["id"]: self._move_item(title, cid),
+                )
+                has_dest = True
+
+        if has_dest:
+            sub.add_separator()
+        sub.add_command(
+            label="  + New category",
+            command=lambda: self._quick_add_category_move(title),
+        )
+
+        menu.add_cascade(label="Move to", menu=sub)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _move_item(self, title: str, to_cat_id: str) -> None:
+        tl = self._layout.setdefault("top_level_items", [])
+        if title in tl:
+            tl.remove(title)
+        for cat in self._layout["categories"]:
+            if title in cat["items"]:
+                cat["items"].remove(title)
+        if to_cat_id == "__top__":
+            tl.append(title)
+        else:
+            for cat in self._layout["categories"]:
+                if cat["id"] == to_cat_id:
+                    cat["items"].append(title)
+                    break
+        self._save_layout()
+        self._populate_categories()
+
+    def _quick_add_category_move(self, item_title: str) -> None:
+        from tkinter import simpledialog
+        import uuid
+        name = simpledialog.askstring(
+            "New category", "Category name:",
+            parent=self._window,
+        )
+        if not name or not name.strip():
+            return
+        cat_id = f"cat-{uuid.uuid4().hex[:8]}"
+        self._layout["categories"].append({
+            "id": cat_id, "label": name.strip(), "expanded": True, "items": [],
+        })
+        self._move_item(item_title, cat_id)
 
     # ──────────────────────────────────────────────────────────────────
     # Public API
