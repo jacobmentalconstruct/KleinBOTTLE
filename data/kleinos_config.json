@@ -1,0 +1,14 @@
+{
+  "palette": "green",
+  "audio": {
+    "enabled": true,
+    "sounds": {
+      "shoot": true,
+      "hit": true,
+      "explosion": true,
+      "player_hit": true,
+      "death": true,
+      "tick": true
+    }
+  }
+}

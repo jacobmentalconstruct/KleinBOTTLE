@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from kleinos.klein_app import KleinGame
+from kleinos import audio
 
 _SAVE_PATH = Path(__file__).parent / "assets" / "highscore.json"
 
@@ -236,6 +237,7 @@ class SpaceInvadersPane(tk.Canvas):
         if "space" in self._keys and self._fire_cd == 0:
             self._bullets.append([float(self._px), float(self._py - 20)])
             self._fire_cd = 15
+            audio.shoot()
 
         # Move player bullets
         self._bullets = [[x, y - self._bullet_speed] for x, y in self._bullets if y > 0]
@@ -257,6 +259,7 @@ class SpaceInvadersPane(tk.Canvas):
         self._inv_timer += 1
         if self._inv_timer >= speed:
             self._inv_timer = 0
+            audio.tick(len(alive))
             if self._step_down:
                 self._gy += self.V_GAP // 2
                 self._step_down = False
@@ -290,6 +293,7 @@ class SpaceInvadersPane(tk.Canvas):
                         self._bullets.remove(bullet)
                     self._score += 10
                     self._explosions.append([ix, iy, 8])
+                    audio.hit()
                     break
 
         # Bomb ↔ player collision
@@ -304,8 +308,10 @@ class SpaceInvadersPane(tk.Canvas):
                 if self._lives <= 0:
                     self._state = "dead"
                     self._check_high_score()
+                    audio.death()
                 else:
                     self._invincible = 60
+                    audio.player_hit()
 
         # Invaders reach the player
         for inv in self._invaders:

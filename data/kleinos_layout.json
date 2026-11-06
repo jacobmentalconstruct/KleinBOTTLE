@@ -4,7 +4,7 @@
     {
       "id": "cat-apps",
       "label": "Apps",
-      "expanded": true,
+      "expanded": false,
       "items": [
         "World Builder",
         "KleinCHAT",

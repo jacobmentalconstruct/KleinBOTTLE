@@ -1,8 +1,8 @@
 """
 kleinos/settings_pane.py
 
-SettingsPane — category management panel for the KleinOS sidebar.
-Opened from the ⚙ Settings button; callbacks are supplied by KleinPC.
+SettingsPane — 4-tab settings panel for KleinOS.
+Tabs: Display | Sound | Keybinds | Navigation
 """
 
 from __future__ import annotations
@@ -10,32 +10,70 @@ from __future__ import annotations
 import tkinter as tk
 from typing import Callable, Optional
 
+from kleinos import audio as _audio
+from kleinos import config as _config
+
 _BG          = "#010a01"
 _CHROME      = "#003311"
 _BORDER      = "#005522"
 _BTN_BG      = "#0a2010"
 _BTN_ACT     = "#0d3a1a"
+_BTN_TAB_ON  = "#0d3a1a"
+_BTN_TAB_OFF = "#050e05"
 _BTN_DEL     = "#2a0808"
 _BTN_DEL_ACT = "#4a1010"
+_STATUS      = "#050e05"
 _TEXT_FG     = "#00dd33"
 _TEXT_DIM    = "#1a4a1a"
 _TEXT_HI     = "#aaffaa"
-_STATUS      = "#050e05"
 _FONT        = ("Consolas", 9)
 _FONT_B      = ("Consolas", 9, "bold")
 _FONT_SM     = ("Consolas", 8)
 
+_PALETTE_COLORS = {
+    "green": "#00dd33",
+    "amber": "#ffaa00",
+    "white": "#d0d0d0",
+    "blue":  "#66aaff",
+    "red":   "#ff4444",
+}
+_PALETTE_LABELS = {
+    "green": "Green Phosphor",
+    "amber": "Amber Phosphor",
+    "white": "White Phosphor",
+    "blue":  "Blue-White Phosphor",
+    "red":   "Red Phosphor",
+}
+
+_KEYBINDS = [
+    ("Move left",     "← / A"),
+    ("Move right",    "→ / D"),
+    ("Move up",       "↑ / W"),
+    ("Move down",     "↓ / S"),
+    ("Fire / Select", "Space / Enter"),
+    ("Exit / Back",   "Escape"),
+]
+
+_SOUND_LABELS = {
+    "shoot":      "Shoot",
+    "hit":        "Invader hit",
+    "explosion":  "Explosion",
+    "player_hit": "Player hit",
+    "death":      "Player death",
+    "tick":       "Alien step",
+}
+
 
 class SettingsPane(tk.Frame):
     """
-    Category management panel.
+    Four-tab settings panel.
 
-    Callbacks supplied by KleinPC:
-        on_exit()                     — return to terminal
-        get_layout() -> dict          — read current layout
-        add_category(name)            — create a new category
-        delete_category(cat_id)       — remove; items → Uncategorized
-        rename_category(cat_id, name) — change label
+    Category callbacks supplied by KleinPC:
+        on_exit()
+        get_layout() -> dict
+        add_category(name)
+        delete_category(cat_id)
+        rename_category(cat_id, name)
     """
 
     def __init__(
@@ -54,6 +92,15 @@ class SettingsPane(tk.Frame):
         self._add_category = add_category
         self._delete_category = delete_category
         self._rename_category = rename_category
+        self._cfg = _config.load()
+        self._status_var = tk.StringVar(value="")
+        self._tab_frames: dict[str, tk.Frame] = {}
+        self._tab_btns: dict[str, tk.Button] = {}
+        self._palette_btns: dict[str, tk.Button] = {}
+        self._sound_btns: dict[str, tk.Button] = {}
+        self._master_btn: Optional[tk.Button] = None
+        self._nav_list_frame: Optional[tk.Frame] = None
+        self._new_name = tk.StringVar()
         self._build()
         self.bind("<Escape>", lambda _: on_exit())
 
@@ -63,29 +110,239 @@ class SettingsPane(tk.Frame):
         # Chrome bar
         bar = tk.Frame(self, bg=_CHROME, bd=0)
         bar.pack(fill="x")
-        tk.Label(bar, text="SETTINGS — CATEGORIES",
-                 bg=_CHROME, fg=_TEXT_FG, font=_FONT_B, padx=8, pady=4,
-                 ).pack(side="left")
+        tk.Label(bar, text="SETTINGS", bg=_CHROME, fg=_TEXT_FG,
+                 font=_FONT_B, padx=8, pady=4).pack(side="left")
         tk.Button(
             bar, text="← Back", command=self._on_exit,
             bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
             activeforeground=_TEXT_HI, font=_FONT_SM,
             relief="flat", padx=8, pady=2, bd=0, cursor="hand2",
         ).pack(side="right", padx=6, pady=2)
+
+        # Tab bar
+        tab_bar = tk.Frame(self, bg=_CHROME, bd=0)
+        tab_bar.pack(fill="x")
+        for name in ("Display", "Sound", "Keybinds", "Navigation"):
+            btn = tk.Button(
+                tab_bar, text=name,
+                command=lambda n=name: self._switch_tab(n),
+                bg=_BTN_TAB_OFF, fg=_TEXT_DIM,
+                activebackground=_BTN_TAB_ON, activeforeground=_TEXT_FG,
+                font=_FONT_SM, relief="flat", padx=10, pady=4, bd=0,
+                cursor="hand2",
+            )
+            btn.pack(side="left")
+            self._tab_btns[name] = btn
+
         tk.Frame(self, bg=_BORDER, height=1).pack(fill="x")
 
+        # Tab content area
+        content = tk.Frame(self, bg=_BG)
+        content.pack(fill="both", expand=True)
+
+        for name, builder in (
+            ("Display",    self._build_display_tab),
+            ("Sound",      self._build_sound_tab),
+            ("Keybinds",   self._build_keybinds_tab),
+            ("Navigation", self._build_navigation_tab),
+        ):
+            frame = tk.Frame(content, bg=_BG)
+            self._tab_frames[name] = frame
+            builder(frame)
+
+        # Status bar
+        tk.Label(
+            self, textvariable=self._status_var,
+            bg=_STATUS, fg=_TEXT_DIM, font=_FONT_SM, anchor="w", padx=8,
+        ).pack(fill="x", side="bottom")
+
+        self._switch_tab("Display")
+        self.after(50, self.focus_set)
+
+    def _switch_tab(self, name: str) -> None:
+        for n, frame in self._tab_frames.items():
+            frame.pack_forget()
+        for n, btn in self._tab_btns.items():
+            if n == name:
+                btn.configure(bg=_BTN_TAB_ON, fg=_TEXT_FG)
+            else:
+                btn.configure(bg=_BTN_TAB_OFF, fg=_TEXT_DIM)
+        self._tab_frames[name].pack(fill="both", expand=True, padx=8, pady=6)
+        self._status_var.set("")
+
+    # ── Display tab ──────────────────────────────────────────────────
+
+    def _build_display_tab(self, parent: tk.Frame) -> None:
+        tk.Label(parent, text="PHOSPHOR COLOR",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 2))
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
+
+        current = self._cfg.get("palette", "green")
+        for key in ("green", "amber", "white", "blue", "red"):
+            color  = _PALETTE_COLORS[key]
+            label  = _PALETTE_LABELS[key]
+            is_sel = key == current
+            prefix = "● " if is_sel else "○ "
+            btn = tk.Button(
+                parent,
+                text=f"{prefix}{label}",
+                command=lambda k=key: self._select_palette(k),
+                bg=_BTN_ACT if is_sel else _BTN_BG,
+                fg=color,
+                activebackground=_BTN_ACT, activeforeground=color,
+                font=_FONT if is_sel else _FONT_SM,
+                relief="flat", anchor="w", padx=12, pady=4, bd=0, cursor="hand2",
+            )
+            btn.pack(fill="x", pady=1)
+            self._palette_btns[key] = btn
+
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(8, 4))
+        tk.Label(parent, text="⚠  Restart required to apply",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x")
+
+    def _select_palette(self, key: str) -> None:
+        current = self._cfg.get("palette", "green")
+        if key == current:
+            return
+        self._cfg["palette"] = key
+        _config.save(self._cfg)
+        for k, btn in self._palette_btns.items():
+            is_sel = k == key
+            color  = _PALETTE_COLORS[k]
+            btn.configure(
+                text=f"{'● ' if is_sel else '○ '}{_PALETTE_LABELS[k]}",
+                bg=_BTN_ACT if is_sel else _BTN_BG,
+                fg=color,
+                font=_FONT if is_sel else _FONT_SM,
+            )
+        self._status_var.set(f"Palette set to '{_PALETTE_LABELS[key]}' — restart to apply.")
+
+    # ── Sound tab ────────────────────────────────────────────────────
+
+    def _build_sound_tab(self, parent: tk.Frame) -> None:
+        cfg_audio = self._cfg.get("audio", {})
+        master_on = bool(cfg_audio.get("enabled", True))
+
+        # Master toggle
+        master_row = tk.Frame(parent, bg=_BG)
+        master_row.pack(fill="x", pady=(4, 0))
+        tk.Label(master_row, text="Master Audio",
+                 bg=_BG, fg=_TEXT_FG, font=_FONT_B, anchor="w",
+                 ).pack(side="left", padx=(0, 8))
+        self._master_btn = tk.Button(
+            master_row,
+            text=self._toggle_text(master_on),
+            command=self._toggle_master,
+            bg=_BTN_ACT if master_on else _BTN_BG,
+            fg=_TEXT_FG if master_on else _TEXT_DIM,
+            activebackground=_BTN_ACT, activeforeground=_TEXT_HI,
+            font=_FONT_SM, relief="flat", padx=8, pady=2, bd=0, cursor="hand2",
+        )
+        self._master_btn.pack(side="left")
+
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(6, 4))
+
+        # Per-sound toggles
+        sounds = cfg_audio.get("sounds", {})
+        for key, label in _SOUND_LABELS.items():
+            on = bool(sounds.get(key, True))
+            row = tk.Frame(parent, bg=_BG)
+            row.pack(fill="x", pady=1)
+            tk.Label(row, text=label, bg=_BG, fg=_TEXT_DIM, font=_FONT_SM,
+                     anchor="w", width=16).pack(side="left")
+            btn = tk.Button(
+                row,
+                text=self._toggle_text(on),
+                command=lambda k=key: self._toggle_sound(k),
+                bg=_BTN_ACT if on else _BTN_BG,
+                fg=_TEXT_FG if on else _TEXT_DIM,
+                activebackground=_BTN_ACT, activeforeground=_TEXT_HI,
+                font=_FONT_SM, relief="flat", padx=8, pady=2, bd=0, cursor="hand2",
+            )
+            btn.pack(side="left")
+            self._sound_btns[key] = btn
+
+    @staticmethod
+    def _toggle_text(on: bool) -> str:
+        return " ON " if on else "OFF"
+
+    def _toggle_master(self) -> None:
+        cfg_audio = self._cfg.setdefault("audio", {})
+        new_val = not bool(cfg_audio.get("enabled", True))
+        cfg_audio["enabled"] = new_val
+        _audio.set_enabled(new_val)
+        _config.save(self._cfg)
+        if self._master_btn:
+            self._master_btn.configure(
+                text=self._toggle_text(new_val),
+                bg=_BTN_ACT if new_val else _BTN_BG,
+                fg=_TEXT_FG if new_val else _TEXT_DIM,
+            )
+        self._status_var.set("Audio " + ("enabled." if new_val else "disabled."))
+
+    def _toggle_sound(self, key: str) -> None:
+        cfg_audio = self._cfg.setdefault("audio", {})
+        sounds = cfg_audio.setdefault("sounds", {})
+        new_val = not bool(sounds.get(key, True))
+        sounds[key] = new_val
+        _audio.set_sound(key, new_val)
+        _config.save(self._cfg)
+        btn = self._sound_btns.get(key)
+        if btn:
+            btn.configure(
+                text=self._toggle_text(new_val),
+                bg=_BTN_ACT if new_val else _BTN_BG,
+                fg=_TEXT_FG if new_val else _TEXT_DIM,
+            )
+        label = _SOUND_LABELS.get(key, key)
+        self._status_var.set(f"{label} " + ("on." if new_val else "off."))
+
+    # ── Keybinds tab ─────────────────────────────────────────────────
+
+    def _build_keybinds_tab(self, parent: tk.Frame) -> None:
+        tk.Label(parent, text="KEY BINDINGS",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 2))
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
+
+        # Header
+        hdr = tk.Frame(parent, bg=_BG)
+        hdr.pack(fill="x", pady=(0, 2))
+        tk.Label(hdr, text="Action", bg=_BG, fg=_TEXT_DIM,
+                 font=_FONT_SM, anchor="w", width=18).pack(side="left")
+        tk.Label(hdr, text="Keys", bg=_BG, fg=_TEXT_DIM,
+                 font=_FONT_SM, anchor="w").pack(side="left")
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 4))
+
+        for action, keys in _KEYBINDS:
+            row = tk.Frame(parent, bg=_BG)
+            row.pack(fill="x", pady=1)
+            tk.Label(row, text=action, bg=_BG, fg=_TEXT_FG,
+                     font=_FONT, anchor="w", width=18).pack(side="left")
+            tk.Label(row, text=keys, bg=_BG, fg=_TEXT_HI,
+                     font=_FONT_B, anchor="w").pack(side="left")
+
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(8, 4))
+        tk.Label(parent, text="Rebinding coming later.",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x")
+
+    # ── Navigation tab ───────────────────────────────────────────────
+
+    def _build_navigation_tab(self, parent: tk.Frame) -> None:
         # Category list
-        self._list_frame = tk.Frame(self, bg=_BG)
-        self._list_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        self._nav_list_frame = tk.Frame(parent, bg=_BG)
+        self._nav_list_frame.pack(fill="both", expand=True)
         self._refresh_list()
 
         # Add-category footer
-        tk.Frame(self, bg=_BORDER, height=1).pack(fill="x")
-        add_row = tk.Frame(self, bg=_STATUS, bd=0)
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x")
+        add_row = tk.Frame(parent, bg=_STATUS, bd=0)
         add_row.pack(fill="x")
         tk.Label(add_row, text="New:", bg=_STATUS, fg=_TEXT_DIM,
                  font=_FONT_SM, padx=8).pack(side="left")
-        self._new_name = tk.StringVar()
         entry = tk.Entry(
             add_row, textvariable=self._new_name,
             bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
@@ -100,49 +357,39 @@ class SettingsPane(tk.Frame):
             relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
         ).pack(side="right", padx=6, pady=4)
 
-        # Status bar
-        self._status_var = tk.StringVar(value="")
-        tk.Label(
-            self, textvariable=self._status_var,
-            bg=_STATUS, fg=_TEXT_DIM, font=_FONT_SM, anchor="w", padx=8,
-        ).pack(fill="x", side="bottom")
-
-        self.after(50, self.focus_set)
-
     def _refresh_list(self) -> None:
-        for w in self._list_frame.winfo_children():
+        if not self._nav_list_frame:
+            return
+        for w in self._nav_list_frame.winfo_children():
             w.destroy()
 
         cats = self._get_layout().get("categories", [])
         if not cats:
-            tk.Label(self._list_frame, text="No categories yet.",
+            tk.Label(self._nav_list_frame, text="No categories yet.",
                      bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
                      ).pack(fill="x", pady=4)
             return
 
         # Column headers
-        hdr = tk.Frame(self._list_frame, bg=_BG)
+        hdr = tk.Frame(self._nav_list_frame, bg=_BG)
         hdr.pack(fill="x", pady=(0, 2))
         tk.Label(hdr, text="Name", bg=_BG, fg=_TEXT_DIM,
                  font=_FONT_SM, anchor="w", width=18).pack(side="left")
         tk.Label(hdr, text="n", bg=_BG, fg=_TEXT_DIM,
                  font=_FONT_SM, anchor="w", width=4).pack(side="left")
-        tk.Frame(self._list_frame, bg=_BORDER, height=1).pack(fill="x", pady=(0, 4))
+        tk.Frame(self._nav_list_frame, bg=_BORDER, height=1).pack(fill="x", pady=(0, 4))
 
         for cat in cats:
             self._add_cat_row(cat)
 
     def _add_cat_row(self, cat: dict) -> None:
         n = len(cat.get("items", []))
-
-        row = tk.Frame(self._list_frame, bg=_BG)
+        row = tk.Frame(self._nav_list_frame, bg=_BG)  # type: ignore[arg-type]
         row.pack(fill="x", pady=1)
-
         tk.Label(row, text=cat["label"], bg=_BG, fg=_TEXT_FG,
                  font=_FONT, anchor="w", width=18).pack(side="left")
         tk.Label(row, text=str(n), bg=_BG, fg=_TEXT_DIM,
                  font=_FONT_SM, anchor="w", width=4).pack(side="left")
-
         tk.Button(
             row, text="✕", command=lambda c=cat: self._do_delete(c),
             bg=_BTN_DEL, fg="#aa4444",
@@ -156,7 +403,7 @@ class SettingsPane(tk.Frame):
             font=_FONT_SM, relief="flat", padx=6, pady=1, bd=0, cursor="hand2",
         ).pack(side="right", padx=2)
 
-    # ── Actions ──────────────────────────────────────────────────────
+    # ── Navigation actions ───────────────────────────────────────────
 
     def _do_add(self) -> None:
         name = self._new_name.get().strip()
@@ -244,7 +491,6 @@ class SettingsPane(tk.Frame):
             relief="flat", padx=12, pady=3, bd=0, cursor="hand2",
         ).pack(side="left", padx=4)
         popup.bind("<Escape>", lambda _: on_cancel())
-        # Centre over parent after all widgets are placed
         popup.update_idletasks()
         pw = popup.winfo_reqwidth()
         ph = popup.winfo_reqheight()

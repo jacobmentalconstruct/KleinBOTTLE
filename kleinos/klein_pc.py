@@ -36,6 +36,8 @@ from kleinos.app_pane import AppPane
 from kleinos.klein_app import KleinApp, KleinChat, KleinGame
 from kleinos.retro_monitor_frame import RetroMonitorFrame
 from kleinos.terminal_pane import TerminalPane
+from kleinos import audio as _audio
+from kleinos import config as _config
 
 _ASSETS = Path(__file__).parent / "assets"
 _LAYOUT_PATH = Path(__file__).resolve().parent.parent / "data" / "kleinos_layout.json"
@@ -57,6 +59,33 @@ _S_WIDTH   = 148
 
 _CONTENT_BG = "#010a01"
 _WIN_BG     = "#050508"
+
+# ── Multi-palette support ────────────────────────────────────────────
+_PALETTES: dict[str, dict[str, str]] = {
+    "green": dict(bg="#050a05", head="#081208", hov="#0d2010", act="#0a3a0a",
+                  fg="#3a7a3a", fg_on="#00dd33", fg_dim="#1a4a1a", sep="#0a180a"),
+    "amber": dict(bg="#100800", head="#180d00", hov="#201400", act="#301c00",
+                  fg="#7a5010", fg_on="#ffaa00", fg_dim="#3a2808", sep="#180e00"),
+    "white": dict(bg="#050505", head="#0a0a0a", hov="#1a1a1a", act="#2a2a2a",
+                  fg="#606060", fg_on="#d0d0d0", fg_dim="#303030", sep="#0f0f0f"),
+    "blue":  dict(bg="#000810", head="#000e1a", hov="#001022", act="#001a33",
+                  fg="#2a4a7a", fg_on="#66aaff", fg_dim="#1a2a4a", sep="#000810"),
+    "red":   dict(bg="#0a0000", head="#120000", hov="#1a0000", act="#2a0000",
+                  fg="#7a1a1a", fg_on="#ff4444", fg_dim="#3a0808", sep="#0f0000"),
+}
+
+
+def _apply_palette(name: str) -> None:
+    global _S_BG, _S_HEAD, _S_BTN, _S_HOV, _S_ACT, _S_FG, _S_FG_ON, _S_FG_DIM, _S_SEP
+    p = _PALETTES.get(name, _PALETTES["green"])
+    _S_BG = _S_BTN = p["bg"]
+    _S_HEAD   = p["head"]
+    _S_HOV    = p["hov"]
+    _S_ACT    = p["act"]
+    _S_FG     = p["fg"]
+    _S_FG_ON  = p["fg_on"]
+    _S_FG_DIM = p["fg_dim"]
+    _S_SEP    = p["sep"]
 
 
 # ── Tooltip ──────────────────────────────────────────────────────────
@@ -127,6 +156,9 @@ class KleinPC:
         title: str = "KleinBOTTLE PC",
         layout_path: Path = _LAYOUT_PATH,
     ):
+        _startup_cfg = _config.load()
+        _apply_palette(_startup_cfg.get("palette", "green"))
+        _audio.configure(_startup_cfg)
         self._root = root
         self._apps: list = apps or []
         self._games: list = games or []
