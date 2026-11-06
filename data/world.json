@@ -1,96 +1,353 @@
 {
   "version": 1,
-  "name": "Raithetopia",
+  "name": "KleinBOTTLE House",
   "start_room": "hall",
   "rooms": [
     {
       "id": "hall",
-      "name": "Entrance Hall",
-      "area": "Old House",
-      "description": "A cold draft moves beneath the front door.",
+      "name": "The Hall",
+      "area": "KleinBOTTLE House",
+      "description": "A narrow hallway runs through the heart of the house. Doors branch to every room. The front door sits at the end, daylight outlining its frame.",
       "exits": {
-        "north": "study"
+        "west": "living_room",
+        "north": "kitchen",
+        "east": "office",
+        "south": "bedroom",
+        "out": "front_yard"
       },
       "objects": [
         {
-          "id": "table",
-          "name": "Oak Table",
+          "id": "coat_rack",
+          "name": "Coat Rack",
           "kind": "furniture",
-          "description": "A scarred oak table."
+          "description": "A wooden coat rack hung with a few jackets and an umbrella."
         },
         {
-          "id": "phone",
-          "name": "telephone",
-          "kind": "telephone",
-          "description": "A small black telephone is on the table."
+          "id": "hall_mirror",
+          "name": "Mirror",
+          "kind": "furniture",
+          "description": "A tall mirror leans against the wall near the front door. You look tired."
         }
       ],
       "actors": [],
       "secrets": [],
       "environment": {
-        "weather": "rain",
         "light": "dim",
-        "sound": "Rain on the roof"
+        "sound": "The hum of the house"
       }
     },
     {
-      "id": "study",
-      "name": "Study",
-      "area": "Old House",
-      "description": "A wardrobe stands against the northern wall.",
+      "id": "living_room",
+      "name": "Living Room",
+      "area": "KleinBOTTLE House",
+      "description": "A comfortable room with a worn sofa facing a large screen. Warm light filters through curtained windows. Bookshelves line the far wall.",
+      "exits": {
+        "east": "hall"
+      },
+      "objects": [
+        {
+          "id": "sofa",
+          "name": "Sofa",
+          "kind": "furniture",
+          "description": "A deep, worn sofa with mismatched cushions. Extremely comfortable."
+        },
+        {
+          "id": "screen",
+          "name": "Screen",
+          "kind": "terminal",
+          "description": "A large flat screen mounted on the wall. Currently off."
+        },
+        {
+          "id": "coffee_table",
+          "name": "Coffee Table",
+          "kind": "furniture",
+          "description": "A low table with a few scattered books and an empty mug."
+        },
+        {
+          "id": "living_bookshelf",
+          "name": "Bookshelf",
+          "kind": "furniture",
+          "description": "Floor-to-ceiling shelves packed with paperbacks and a few framed photos."
+        }
+      ],
+      "actors": [],
+      "secrets": [],
+      "environment": {
+        "light": "warm",
+        "sound": "Quiet"
+      }
+    },
+    {
+      "id": "kitchen",
+      "name": "Kitchen",
+      "area": "KleinBOTTLE House",
+      "description": "A compact kitchen that smells of coffee. A back door leads out to the yard. Sunlight comes through a small window above the sink.",
       "exits": {
         "south": "hall",
-        "inside": "wardrobe"
+        "out": "back_yard"
       },
       "objects": [
         {
-          "id": "wardrobe_object",
-          "name": "Wardrobe",
+          "id": "countertop",
+          "name": "Countertop",
           "kind": "furniture",
-          "description": "An old wardrobe."
+          "description": "A clean countertop with a coffee maker and a few dishes drying beside the sink."
         },
         {
-          "id": "desk_computer",
-          "name": "Desk Computer",
-          "kind": "terminal",
-          "description": "A compact computer sits beside a humming monitor."
+          "id": "kitchen_table",
+          "name": "Kitchen Table",
+          "kind": "furniture",
+          "description": "A small round table with two chairs."
+        },
+        {
+          "id": "back_door",
+          "name": "Back Door",
+          "kind": "furniture",
+          "description": "A plain wooden back door. Through its glass panel you can see the back yard."
         }
       ],
       "actors": [],
       "secrets": [],
       "environment": {
-        "weather": "rain",
-        "light": "dim",
-        "sound": "Clock ticking"
+        "light": "bright",
+        "sound": "Coffee maker dripping"
       }
     },
     {
-      "id": "wardrobe",
-      "name": "Inside Wardrobe",
-      "area": "Old House",
-      "description": "Dark coats hang over a hidden compartment.",
+      "id": "bedroom",
+      "name": "Bedroom",
+      "area": "KleinBOTTLE House",
+      "description": "A quiet room with a large bed, curtains drawn against the light. A wardrobe stands against one wall. The bathroom is just through the side door.",
       "exits": {
-        "outside": "study"
+        "north": "hall",
+        "east": "bathroom"
       },
       "objects": [
         {
-          "id": "key",
-          "name": "Iron Key",
-          "kind": "item",
-          "description": "A small iron key."
+          "id": "bed",
+          "name": "Bed",
+          "kind": "furniture",
+          "description": "A large bed with rumpled covers and too many pillows."
+        },
+        {
+          "id": "wardrobe",
+          "name": "Wardrobe",
+          "kind": "furniture",
+          "description": "A tall wardrobe. Clothes hang inside in approximate order."
+        },
+        {
+          "id": "nightstand",
+          "name": "Nightstand",
+          "kind": "furniture",
+          "description": "A small nightstand with a lamp, a glass of water, and a paperback left face-down."
         }
       ],
       "actors": [],
-      "secrets": [
+      "secrets": [],
+      "environment": {
+        "light": "dim",
+        "sound": "Silence"
+      }
+    },
+    {
+      "id": "bathroom",
+      "name": "Bathroom",
+      "area": "KleinBOTTLE House",
+      "description": "A small but tidy bathroom. White tiles, a fogged mirror above the sink, and a claw-foot bathtub along the far wall.",
+      "exits": {
+        "west": "bedroom"
+      },
+      "objects": [
         {
-          "id": "false_back",
-          "description": "A loose wooden panel."
+          "id": "bathtub",
+          "name": "Bathtub",
+          "kind": "furniture",
+          "description": "A claw-foot cast-iron tub. Someone has left a rubber duck on the edge."
+        },
+        {
+          "id": "bathroom_sink",
+          "name": "Sink",
+          "kind": "furniture",
+          "description": "A pedestal sink with a fogged mirror above it."
+        },
+        {
+          "id": "medicine_cabinet",
+          "name": "Medicine Cabinet",
+          "kind": "furniture",
+          "description": "A small cabinet behind the mirror. It is politely closed."
         }
       ],
+      "actors": [],
+      "secrets": [],
       "environment": {
-        "light": "dark"
+        "light": "dim",
+        "sound": "Dripping tap"
+      }
+    },
+    {
+      "id": "office",
+      "name": "Office",
+      "area": "KleinBOTTLE House",
+      "description": "A focused room. A desk sits beneath a window, the glow of a monitor casting soft light. To the left of the desk a floating shelf is wall-mounted at eye level. To the right, a tall bookshelf stands. The cat has claimed the shelf.",
+      "exits": {
+        "west": "hall"
       },
-      "interior_of": "study"
+      "objects": [
+        {
+          "id": "office_desk",
+          "name": "Desk",
+          "kind": "furniture",
+          "description": "A wide desk positioned beneath the window. Papers, a keyboard, and a steaming mug occupy its surface."
+        },
+        {
+          "id": "klein_pc",
+          "name": "KleinBOTTLE PC",
+          "kind": "terminal",
+          "description": "A compact machine on the desk. Its monitor glows a steady green. This is it. This is the computer."
+        },
+        {
+          "id": "cat_shelf",
+          "name": "Floating Shelf",
+          "kind": "furniture",
+          "description": "A wall-mounted shelf to the left of the desk. The cat fills it completely."
+        },
+        {
+          "id": "office_window",
+          "name": "Window",
+          "kind": "furniture",
+          "description": "A wide window directly behind the desk. Outside, the yard stretches to the treeline."
+        },
+        {
+          "id": "office_bookshelf",
+          "name": "Bookshelf",
+          "kind": "furniture",
+          "description": "A tall bookshelf to the right of the desk, packed with technical manuals, notebooks, and a few worn novels."
+        }
+      ],
+      "actors": [
+        {
+          "id": "cat",
+          "name": "Cat",
+          "description": "A grey cat is curled up on the floating shelf, deeply asleep. One paw hangs over the edge."
+        }
+      ],
+      "secrets": [],
+      "environment": {
+        "light": "monitor glow",
+        "sound": "Fan hum and distant birdsong"
+      }
+    },
+    {
+      "id": "front_yard",
+      "name": "Front Yard",
+      "area": "Outside",
+      "description": "A neat front yard wraps around the front of the house. Flagstones lead from the front door to a large iron gate in the garden wall. The house stands behind you.",
+      "exits": {
+        "in": "hall",
+        "out": "front_woods"
+      },
+      "objects": [
+        {
+          "id": "front_gate",
+          "name": "Front Gate",
+          "kind": "furniture",
+          "description": "A large iron gate, slightly rusty at the hinges. It opens with a satisfying clank."
+        },
+        {
+          "id": "garden_path",
+          "name": "Garden Path",
+          "kind": "furniture",
+          "description": "Flagstones set into neat grass, running from the front door to the gate."
+        }
+      ],
+      "actors": [],
+      "secrets": [],
+      "environment": {
+        "weather": "clear",
+        "light": "daylight",
+        "sound": "Wind in the trees"
+      }
+    },
+    {
+      "id": "back_yard",
+      "name": "Back Yard",
+      "area": "Outside",
+      "description": "A quiet back yard. A vegetable patch runs along the fence. A small wooden gate in the far corner leads into the trees.",
+      "exits": {
+        "in": "kitchen",
+        "out": "back_woods"
+      },
+      "objects": [
+        {
+          "id": "back_gate",
+          "name": "Back Gate",
+          "kind": "furniture",
+          "description": "A small wooden gate, worn smooth. It opens quietly on well-oiled hinges."
+        },
+        {
+          "id": "veggie_patch",
+          "name": "Vegetable Patch",
+          "kind": "furniture",
+          "description": "Raised beds with tomatoes, herbs, and something leafy you don't recognise."
+        }
+      ],
+      "actors": [],
+      "secrets": [],
+      "environment": {
+        "weather": "clear",
+        "light": "daylight",
+        "sound": "Birdsong"
+      }
+    },
+    {
+      "id": "front_woods",
+      "name": "Wooded Path",
+      "area": "Outside",
+      "description": "A narrow path winds between tall trees. Roots cross the ground, light filters green through the canopy. The path loops around the property — you can hear the back of the house through the trees ahead.",
+      "exits": {
+        "back": "front_yard",
+        "forward": "back_woods"
+      },
+      "objects": [
+        {
+          "id": "old_oak",
+          "name": "Old Oak",
+          "kind": "furniture",
+          "description": "A very old oak. Its bark is carved with initials too faded to read."
+        }
+      ],
+      "actors": [],
+      "secrets": [],
+      "environment": {
+        "weather": "clear",
+        "light": "dappled",
+        "sound": "Wind in leaves"
+      }
+    },
+    {
+      "id": "back_woods",
+      "name": "Wooded Path",
+      "area": "Outside",
+      "description": "The path curves back toward the house. Through the trees you can see the back fence and the small wooden gate. The path continues around to the front if you keep going.",
+      "exits": {
+        "back": "back_yard",
+        "forward": "front_woods"
+      },
+      "objects": [
+        {
+          "id": "mossy_rock",
+          "name": "Mossy Rock",
+          "kind": "furniture",
+          "description": "A large flat rock covered in soft moss. Someone has left a coffee cup on it."
+        }
+      ],
+      "actors": [],
+      "secrets": [],
+      "environment": {
+        "weather": "clear",
+        "light": "dappled",
+        "sound": "Leaves underfoot"
+      }
     }
   ]
 }
