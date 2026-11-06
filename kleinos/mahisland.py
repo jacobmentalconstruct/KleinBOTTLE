@@ -1083,6 +1083,9 @@ class MAHisLANDPane(tk.Canvas):
 
     def _draw(self) -> None:
         self.delete("all")
+        if self._state == "start":
+            self._draw_start_screen()
+            return
         self._draw_world()
         self._draw_player()
         self._draw_hud()
@@ -1092,6 +1095,8 @@ class MAHisLANDPane(tk.Canvas):
             self._draw_inventory()
         if self._state == "dead":
             self._draw_dead()
+        elif self._state == "confirm_exit":
+            self._draw_confirm_exit()
 
     def _draw_world(self) -> None:
         # Visible tile range
@@ -1237,6 +1242,9 @@ class MAHisLANDPane(tk.Canvas):
         pty = int(self._py // TILE)
         zone = "CLAIMED" if self._claimed(ptx, pty) else "WILD"
         self.create_text(8, 38, anchor="nw", text=zone, fill=_HUD, font=("Consolas", 7))
+        self.create_text(8, 52, anchor="nw",
+                         text=f"score {self._score}",
+                         fill=_DIM, font=("Consolas", 7))
 
         # Hotbar — [1] FIST | [2] HAMMER | [3] FOOD (consumable, never selected)
         bsize = 36
@@ -1354,13 +1362,59 @@ class MAHisLANDPane(tk.Canvas):
         self.create_text(x0 + w // 2, y0 + h - 8, anchor="s",
                          text="[I] close", fill=_DIM, font=("Consolas", 7))
 
+    def _draw_start_screen(self) -> None:
+        cx, cy = self._vw // 2, self._vh // 2
+        self.create_text(cx, cy - 90,
+                         text="MAHisLAND",
+                         fill=_BRIGHT, font=("Consolas", 28, "bold"))
+        self.create_text(cx, cy - 58,
+                         text="Survive. Build. Claim the land.",
+                         fill=_MID, font=("Consolas", 10))
+        self.create_text(cx, cy - 28,
+                         text=f"High Score:  {self._high_score}",
+                         fill=_DIM, font=("Consolas", 9))
+        y = cy + 10
+        if self._has_save:
+            self.create_text(cx, y,
+                             text="[C]  Continue",
+                             fill=_BRIGHT, font=("Consolas", 12))
+            y += 30
+        self.create_text(cx, y,
+                         text="[N]  New Game",
+                         fill=_MID, font=("Consolas", 12))
+        self.create_text(cx, cy + 90,
+                         text="[ESC]  Exit",
+                         fill=_DIM, font=("Consolas", 9))
+
+    def _draw_confirm_exit(self) -> None:
+        cx, cy = self._vw // 2, self._vh // 2
+        self.create_rectangle(cx - 170, cy - 55, cx + 170, cy + 55,
+                              fill=_BG, outline=_BORDER, width=1)
+        self.create_text(cx, cy - 28,
+                         text="Save and return to menu?",
+                         fill=_BRIGHT, font=("Consolas", 10, "bold"))
+        self.create_text(cx, cy,
+                         text=f"Score so far:  {self._score}",
+                         fill=_DIM, font=("Consolas", 8))
+        self.create_text(cx, cy + 24,
+                         text="[Y] Save & Exit     [N] / [ESC] Stay",
+                         fill=_MID, font=("Consolas", 9))
+
     def _draw_dead(self) -> None:
         cx, cy = self._vw // 2, self._vh // 2
-        self.create_rectangle(cx - 120, cy - 50, cx + 120, cy + 50,
+        self.create_rectangle(cx - 150, cy - 70, cx + 150, cy + 70,
                               fill=_BG, outline=_BORDER, width=1)
-        self.create_text(cx, cy - 20, text="YOU DIED",
+        self.create_text(cx, cy - 42, text="YOU DIED",
                          fill=_BRIGHT, font=("Consolas", 18, "bold"))
-        self.create_text(cx, cy + 10, text="[R] New world   [ESC] Exit",
+        self.create_text(cx, cy - 10,
+                         text=f"Score: {self._score}",
+                         fill=_MID, font=("Consolas", 11))
+        hi_col = _BRIGHT if self._score >= self._high_score and self._score > 0 else _DIM
+        self.create_text(cx, cy + 14,
+                         text=f"Best:  {self._high_score}",
+                         fill=hi_col, font=("Consolas", 9))
+        self.create_text(cx, cy + 44,
+                         text="[R] Menu   [ESC] Exit KleinOS",
                          fill=_MID, font=("Consolas", 9))
 
 
