@@ -1,115 +1,115 @@
-# Adventure — World Builder + Play (v1)
+# KleinBOTTLE
 
-A small, standalone Python text adventure: edit rooms in a **World Builder** tab and explore the same JSON world in a **Play** tab. Standard-library Python and Tkinter only; no development-sidecar, network, model, or third-party package requirements.
+You are sitting at a desk. The monitor glows a steady green.  
+Interact with the computer and it opens — a world inside itself.
+
+---
 
 ## Run
 
-- Windows: double-click `run.bat` (requires Python with the `py` launcher).
-- Linux/macOS: `./run.sh` (Linux may need `sudo apt install python3-tk`).
-- Or: `python -m src.app` from the project root.
+```bat
+setup_env.bat        # first time only — creates .venv, installs Pillow
+run.bat              # start the game
+```
 
-Your editable world definition is stored at `data/world.json`.
+Linux / macOS:
 
-**Upgrading an existing installation:** use the separate *upgrade* ZIP and extract its contents into the project root. It contains only source, tests, and README; it **does not contain `data/world.json`** and will not overwrite your world. You can make a backup of your project before upgrading.
+```sh
+./setup_env.sh
+./run.sh
+```
 
-## World Builder tab
+Or directly: `python -m kleinos`
 
-1. Click **New Room**. Enter a stable `id`, a name, an area, and a description.
-2. Define exits one per line, like `north:study` or `inside:wardrobe`.
-3. Enter environment values and objects. **Add Object** creates a basic object from a form. **Full Room JSON** exposes additional properties.
-4. Click **Save Room**. Changes are written to `data/world.json` immediately. Select a start room and save world settings.
-5. Paste generated JSON through **Import / Paste JSON**, or load a `.json` file. To explore the built-in test world, import `examples/rooms.json`.
-6. **Export World JSON** saves a copy of the world.
+---
 
-## Play tab
+## What it is
 
-Switch to **Play** to start at the world's configured start room (or its first room if a start room wasn't chosen). The left panel is the command transcript. The right panel contains your location, clickable exits, and carried inventory.
+KleinBOTTLE opens on a **title screen**, then drops you into a **text adventure** starting in a home office. Explore the house, yard, and looping woods. Interact with the PC on the desk to open **KleinOS** — a retro desktop that contains its own games and tools, including a text adventure of the same world.
 
-### Commands
+### The house
 
-| Command | Aliases / notes |
-| --- | --- |
-| `look` | `l` — describe room, visible objects/actors, environment, exits |
-| `inspect <object>` | `x`, `examine`, `look at` — inspect a visible object, actor, or carried item |
-| `go <exit>` | `move`, `walk`, or type an exit name like `north` directly |
-| `enter <exit or room>` | Move through a connected exit, e.g. `enter wardrobe` |
-| `leave` | Follow an `outside` or `out` exit if present |
-| `take <item>` | `get`, `pick up` — take a portable object |
-| `drop <item>` | Drop carried item in current room |
-| `inventory` | `i`, `inv` — see what you're carrying |
-| `help` | `?` — list commands |
+Ten rooms connected in a loop:  
+Hall → Living Room, Kitchen, Bedroom (en-suite Bathroom), Office  
+Front door → Front Yard → Front Woods → Back Woods → Back Yard → Kitchen back door  
+Both woodland paths loop — leaving one gate brings you back through the other.
 
-Example walkthrough after importing `examples/rooms.json`:
+### KleinOS PC
 
-1. `look` → Entrance Hall
-2. `go north` → Study
-3. `inspect wardrobe` → see wardrobe description
-4. `enter wardrobe` → Inside Wardrobe
-5. `take key` → Iron Key enters inventory
-6. `leave` → back to Study, carrying the key
+Opened by interacting with the computer in the office. Contains:
 
-**Reload World / Restart** reads the latest saved `data/world.json` and starts a new session. **Switching back to the Play tab also restarts play**, to make newly saved edits immediately testable. Unsaved changes still sitting in the builder form are not included: click **Save Room** or **Save World Settings** first.
+| Section | Items |
+|---------|-------|
+| Apps | World Builder, Ollama Chat, Notes |
+| Games | MAHisLAND (survival), The Shack, KleinBOTTLE (text adventure), Space Invaders |
 
-Gameplay state (the player's current room and inventory, plus moved objects) is **in-memory only**. The world builder's JSON is never changed by playing, and there are no saved games yet.
+### MAHisLAND
 
-## World JSON contract
+Arcade survival game on a pixel island. Hotbar: **1** Fist (swing), **2** Hammer (place blueprint), **3** eat food. **R** opens the build menu, **RMB** interacts/opens. Gates toggle open on RMB. ESC → confirm exit with save. Scoring, high score, resume on restart.
 
-Worlds have `version: 1`, `name`, `start_room`, and `rooms` (array). Each room has:
+---
 
-- Required: `id` (stable unique room identifier), `name`
-- Common: `area`, `description`, `exits` (`exit-name` → destination room ID), `environment` (object), `objects`/`actors`/`secrets` (arrays of objects)
-- Optional extra properties are preserved during editor saves/imports; runtime behavior is implemented only for the subset listed below.
+## Room images
 
-For game objects, use `id`, `name`, `description`, `kind`, and optionally `portable: true/false` or `takeable: true/false`. Only `kind: "item"` is portable by default; other kinds like furniture stay in the room unless explicitly marked portable. An object with `hidden: true` is excluded from ordinary Look, Inspect, and Take. **There is no reveal-secrets command yet.**
+Each room gets a generated **320×240 retro pixel art background** (Sierra/LucasArts style), displayed in green phosphor monochrome above the transcript. Images are generated on first visit and cached to `data/rooms/<room_id>.png`.
 
-Enterable interiors are regular rooms with named exits (`inside:wardrobe`, `outside:study`). The `interior_of` field is retained as metadata; the actual movement always follows an exit. Environment values are displayed as text, not rendered as sound/light/weather effects.
+**Requirements:** ComfyUI running at `http://127.0.0.1:8188` (Stability Matrix → Launch ComfyUI).
 
-Import accepts an individual room, list of rooms, or a world document containing `rooms` as a list or object keyed by room ID. Options:
+Pre-generate all rooms at once:
 
-- **Add new** — skip already-present IDs.
-- **Update matching** — replace matching rooms and add new ones.
-- **Replace whole world** — replace rooms and world metadata, after confirmation.
+```bat
+python scripts\gen_room_images.py
+```
 
-Room IDs cannot be renamed through the form (to protect exit references). Deleting a referenced room is blocked. Unresolved exits generate editor warnings and, in Play, a friendly missing-room message.
+Pass `--regen` to overwrite existing images. The in-game **↺ regen** button regenerates the current room.
+
+---
+
+## World JSON
+
+The world is defined in `data/world.json`. Edit it in the World Builder (inside KleinOS) or directly. Each room has `id`, `name`, `area`, `description`, `exits`, `objects`, `actors`. An object with `"kind": "terminal"` triggers the PC interaction hook.
+
+---
+
+## Telephone / Ollama (optional)
+
+Install Ollama and run `ollama pull qwen2.5:3b`. Add an object with `"kind": "telephone"` to any room via the World Builder. In Play, type `answer phone` to call it.
+
+---
 
 ## Architecture
 
+```
+kleinos/              KleinBOTTLE entry point and UI
+  __main__.py         title screen → text adventure → KleinPC hook
+  kb_surfaces.py      KleinAdventurePane (room image banner + GameSurface)
+  room_panel.py       full-width room image panel, pipeline integration
+  mahisland.py        MAHisLAND arcade survival game
+  klein_pc.py         KleinOS desktop window
+  ...
 
-## Telephone / local Ollama (optional)
+src/                  text adventure engine (world builder + game session)
+  surfaces/game.py    transcript UI, command input
+  surfaces/builder.py world editor UI
+  game.py             parser, session state
+  world_model.py      world JSON contract and validation
 
-Install Ollama on the same computer and run `ollama pull qwen2.5:3b`.
-Ollama must be running at `127.0.0.1:11434`. No cloud service or API key is used.
+data/
+  world.json          KleinBOTTLE house world
+  splash.png          title screen art
+  rooms/              cached room background images (generated)
 
-In the World Builder, open a room, choose **Add Object** or **Edit Object**,
-set **Kind** to `telephone`, and set its local **Model**, **System prompt**, and
-**Ringing** checkbox. Click **Apply to Room**, then **Save Room**. The model
-and persona are stored inside that object's JSON as `ollama.model` and
-`ollama.system`. The phone does not depend on either development sidecar.
-
-In Play, type `answer phone` while in the room. A `Hello?` starts the call;
-type natural dialogue (or `say hello`) until `hang up`. Each call keeps its
-own brief in-memory conversation; no call logs are saved to world JSON.
-The interface remains responsive during inference and an Ollama failure
-shows an offline message rather than breaking the game.
-
-The example world contains a ringing phone in the Study. This patch intentionally
-does not change `data/world.json`: bring your own phone into any room using
-the object editor.
-
-```text
-src/app.py                    thin app shell; Tk root and two surface tabs
-src/surfaces/builder.py       editor surface / forms
-src/world_builder.py         editor-domain orchestrator
-src/surfaces/game.py          play surface / transcript and command input
-src/game.py                   game-domain orchestrator / parser / session state
-src/world_model.py           shared world JSON contract and validation
-src/world_store.py           shared JSON file manager (atomic writes)
+scripts/
+  gen_room_images.py  batch generate all room backgrounds
 ```
 
-Neither surface calls the other. The editor writes the world JSON; a game session loads it and owns a separate mutable copy. Future surfaces can share `world_model` and `world_store` without reusing either UI.
+---
 
-## Deliberately not included yet
+## Dependencies
 
-No action-rule system, `use`/`open` behavior, container traversal, secret discovery, dialogue, NPC intelligence, combat, audio playback, persistent save games, networking or AI inference. Objects, actors, secrets, and extra metadata can already be authored through Full Room JSON and imports; runtime support can be added one behavior at a time.
-
-Run tests: `python -m unittest discover -s tests -v`.
+| Package | Purpose |
+|---------|---------|
+| `pillow` | Room images and splash screen (green phosphor tint) |
+| `tkinter` | UI (stdlib) |
+| ComfyUI | Local image generation (optional — game runs without it) |
+| Ollama | Telephone NPC (optional) |
