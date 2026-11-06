@@ -14,7 +14,7 @@
     {
       "id": "cat-games",
       "label": "Games",
-      "expanded": true,
+      "expanded": false,
       "items": [
         "KleinBOTTLE",
         "Space Invaders"
