@@ -357,7 +357,11 @@ class MAHisLANDPane(tk.Canvas):
         if self._build_menu_open:
             self._handle_build_click(event.x, event.y)
             return
-        # Left-click always swings / attacks / harvests
+        # Slot 1 = FOOD — click eats
+        if self._hotbar_sel == 1:
+            self._eat_food()
+            return
+        # Slot 0 = FIST (and default) — swing / attack / harvest
         self._do_swing()
 
     def _on_rclick(self, _event: tk.Event) -> None:
@@ -447,6 +451,11 @@ class MAHisLANDPane(tk.Canvas):
         # Swing via key (spacebar fallback)
         if "space" in k and self._swing_cd <= 0:
             self._do_swing()
+
+        # Eat food
+        if "f" in k:
+            k.discard("f")
+            self._eat_food()
 
         # Hunger tick
         self._hunger_acc += dt
@@ -1083,7 +1092,7 @@ class MAHisLANDPane(tk.Canvas):
         bsize = 36
         slots_data = [
             ("FIST",  _BRIGHT),
-            (f"FOOD\n{self._inv.get('food', 0)}", _MID),
+            (f"EAT [F]\n{self._inv.get('food', 0)} food", _MID),
         ]
         total_w = len(slots_data) * (bsize + 4)
         hx = self._vw // 2 - total_w // 2
@@ -1121,7 +1130,7 @@ class MAHisLANDPane(tk.Canvas):
 
         # Controls hint
         self.create_text(self._vw // 2, self._vh - bsize - 20, anchor="s",
-                         text="WASD move | LClick swing | B build menu | RClick place/interact | I inventory | ESC exit",
+                         text="WASD move | LClick swing | F eat | B build menu | RClick place/interact | I inventory | ESC exit",
                          fill=_DIM, font=("Consolas", 7))
 
     def _bar(self, x: int, y: int, w: int, h: int, frac: float,
