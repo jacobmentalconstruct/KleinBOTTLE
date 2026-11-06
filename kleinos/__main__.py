@@ -22,6 +22,7 @@ from kleinos.chat_pane import OllamaChat
 from kleinos.game_pane import SpaceInvaders
 from kleinos.kb_surfaces import WorldBuilder, TextAdventure
 from kleinos.adventure import TheShack
+from kleinos.mahisland import MAHisLAND
 
 
 class NotesApp(KleinApp):
@@ -62,7 +63,7 @@ def main():
     pc = KleinPC(
         root,
         apps=[WorldBuilder(), OllamaChat(), NotesApp()],
-        games=[TheShack(), TextAdventure(), SpaceInvaders()],
+        games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
         title="KleinBOTTLE PC",
     )
     pc.show()

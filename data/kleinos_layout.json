@@ -14,10 +14,13 @@
     {
       "id": "cat-games",
       "label": "Games",
-      "expanded": false,
+      "expanded": true,
       "items": [
         "KleinBOTTLE",
-        "Space Invaders"
+        "Space Invaders",
+        "NULL Invaders",
+        "The Shack",
+        "MAHisLAND"
       ]
     }
   ]
