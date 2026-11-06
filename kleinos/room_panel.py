@@ -57,12 +57,25 @@ def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
     )
 
 
-def _green_tint(img: object, w: int, h: int) -> object:
-    """Resize to w×h and map into green channel for phosphor effect."""
-    img = img.resize((w, h), _NEAREST)  # type: ignore[union-attr]
+def _green_tint(img: object, canvas_w: int, canvas_h: int) -> object:
+    """
+    Scale img to fit within canvas_w×canvas_h keeping aspect ratio,
+    center it on a black canvas, then map to green channel.
+    """
+    iw, ih = img.size  # type: ignore[union-attr]
+    scale = min(canvas_w / iw, canvas_h / ih)
+    new_w = int(iw * scale)
+    new_h = int(ih * scale)
+    img = img.resize((new_w, new_h), _NEAREST)  # type: ignore[union-attr]
     gray = img.convert("L")  # type: ignore[union-attr]
     zeros = gray.point(lambda _: 0)
-    return _PilImage.merge("RGB", (zeros, gray, zeros))  # type: ignore[union-attr]
+    tinted = _PilImage.merge("RGB", (zeros, gray, zeros))  # type: ignore[union-attr]
+    # Paste onto black canvas — centers the image
+    out = _PilImage.new("RGB", (canvas_w, canvas_h), (0, 0, 0))  # type: ignore[union-attr]
+    ox = (canvas_w - new_w) // 2
+    oy = (canvas_h - new_h) // 2
+    out.paste(tinted, (ox, oy))
+    return out
 
 
 class RoomImagePanel(tk.Frame):
