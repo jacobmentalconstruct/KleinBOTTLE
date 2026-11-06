@@ -122,6 +122,84 @@ _GEAR_RECIPES = {
 
 
 # =====================================================================
+# Shape primitives  — (canvas, cx, cy, size, color) -> None
+# =====================================================================
+
+def _shape_tree(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    h = s * 0.9
+    # Crown: triangle
+    pts = [cx, cy - h * 0.55,
+           cx - s * 0.45, cy + h * 0.2,
+           cx + s * 0.45, cy + h * 0.2]
+    cv.create_polygon(pts, fill=col, outline="")
+    # Trunk
+    tw = s * 0.12
+    cv.create_rectangle(cx - tw, cy + h * 0.2, cx + tw, cy + h * 0.5,
+                        fill=col, outline="")
+
+def _shape_stone(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.42
+    # Lumpy 7-point polygon, slightly wider than tall
+    pts = [
+        cx,         cy - r * 0.9,
+        cx + r,     cy - r * 0.4,
+        cx + r*0.9, cy + r * 0.3,
+        cx + r*0.3, cy + r * 0.8,
+        cx - r*0.4, cy + r * 0.8,
+        cx - r,     cy + r * 0.2,
+        cx - r*0.8, cy - r * 0.5,
+    ]
+    cv.create_polygon(pts, fill=col, outline="")
+
+def _shape_bush(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.22
+    offsets = [(-s*0.22, s*0.1), (s*0.22, s*0.1), (0, -s*0.1)]
+    for ox, oy in offsets:
+        cv.create_oval(cx+ox-r, cy+oy-r, cx+ox+r, cy+oy+r, fill=col, outline="")
+
+def _shape_ore(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.4
+    # Hexagon
+    pts = []
+    for i in range(6):
+        a = math.pi / 6 + i * math.pi / 3
+        pts += [cx + r * math.cos(a), cy + r * math.sin(a)]
+    cv.create_polygon(pts, fill=col, outline="")
+
+def _shape_critter(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.28
+    # Oval body
+    cv.create_oval(cx - r*1.4, cy - r, cx + r*1.4, cy + r, fill=col, outline="")
+    # Ear nubs
+    cv.create_oval(cx - r*1.1, cy - r*1.5, cx - r*0.5, cy - r*0.9, fill=col, outline="")
+    cv.create_oval(cx + r*0.5,  cy - r*1.5, cx + r*1.1,  cy - r*0.9, fill=col, outline="")
+
+def _shape_raider(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.42
+    # Diamond body
+    pts = [cx, cy - r, cx + r*0.7, cy, cx, cy + r, cx - r*0.7, cy]
+    cv.create_polygon(pts, fill=col, outline="")
+    # Horn lines
+    cv.create_line(cx - r*0.2, cy - r, cx - r*0.4, cy - r*1.4, fill=col, width=2)
+    cv.create_line(cx + r*0.2, cy - r, cx + r*0.4, cy - r*1.4, fill=col, width=2)
+
+def _shape_player(cv: tk.Canvas, cx: float, cy: float, s: float, col: str) -> None:
+    r = s * 0.38
+    cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=col, outline="")
+
+
+_SHAPES: dict[str, object] = {
+    N_TREE:    _shape_tree,
+    N_STONE:   _shape_stone,
+    N_ORE:     _shape_ore,
+    N_BUSH:    _shape_bush,
+    "critter": _shape_critter,
+    "raider":  _shape_raider,
+    "player":  _shape_player,
+}
+
+
+# =====================================================================
 # World generation
 # =====================================================================
 
@@ -832,10 +910,10 @@ class MAHisLANDPane(tk.Canvas):
             if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
                 col = _NODE_COLOR[node["kind"]]
                 hp_frac = node["hp"] / node["max_hp"]
-                pad = int(TILE * 0.05 + TILE * 0.1 * (1 - hp_frac))
-                self.create_rectangle(sx + pad, sy + pad,
-                                      sx + TILE - pad - 1, sy + TILE - pad - 1,
-                                      fill=col, outline="")
+                size = TILE * (0.85 + 0.15 * hp_frac)
+                draw = _SHAPES.get(node["kind"])
+                if draw:
+                    draw(self, sx + TILE/2, sy + TILE/2, size, col)  # type: ignore[call-arg]
 
         # Structures
         for s in self._structs:
@@ -858,23 +936,19 @@ class MAHisLANDPane(tk.Canvas):
             sx = mob["x"] - self._camx
             sy = mob["y"] - self._camy
             if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
-                r = TILE * 0.35
                 col = _MID if mob["kind"] == "critter" else _BRIGHT
-                # Critter = circle, raider = diamond
-                if mob["kind"] == "critter":
-                    self.create_oval(sx - r, sy - r, sx + r, sy + r,
-                                     fill=col, outline="")
-                else:
-                    pts = [sx, sy - r, sx + r, sy, sx, sy + r, sx - r, sy]
-                    self.create_polygon(pts, fill=col, outline="")
+                draw = _SHAPES.get(mob["kind"])
+                if draw:
+                    draw(self, sx, sy, TILE, col)  # type: ignore[call-arg]
                 # HP bar above mob
                 bw = int(TILE * 0.8)
                 hp_f = mob["hp"] / mob["max_hp"]
-                self.create_rectangle(sx - bw//2, sy - r - 5,
-                                      sx + bw//2, sy - r - 1,
+                bar_top = sy - TILE * 0.55
+                self.create_rectangle(sx - bw//2, bar_top - 4,
+                                      sx + bw//2, bar_top,
                                       fill=_BG, outline="")
-                self.create_rectangle(sx - bw//2, sy - r - 5,
-                                      sx - bw//2 + int(bw * hp_f), sy - r - 1,
+                self.create_rectangle(sx - bw//2, bar_top - 4,
+                                      sx - bw//2 + int(bw * hp_f), bar_top,
                                       fill=col, outline="")
 
         # Swing flash: line from player to tip
@@ -898,13 +972,12 @@ class MAHisLANDPane(tk.Canvas):
     def _draw_player(self) -> None:
         sx = self._px - self._camx
         sy = self._py - self._camy
-        r = TILE * 0.4
-        # Body
         col = _BRIGHT if "tunic" in self._gear else _MID
-        self.create_oval(sx - r, sy - r, sx + r, sy + r, fill=col, outline="")
+        _shape_player(self, sx, sy, TILE, col)
         # Direction indicator
-        ex = sx + math.cos(self._angle) * r * 1.6
-        ey = sy + math.sin(self._angle) * r * 1.6
+        r = TILE * 0.38
+        ex = sx + math.cos(self._angle) * r * 1.7
+        ey = sy + math.sin(self._angle) * r * 1.7
         self.create_line(sx, sy, ex, ey, fill=_BRIGHT, width=2)
 
     def _draw_hud(self) -> None:
