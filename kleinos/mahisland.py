@@ -99,9 +99,10 @@ HEARTH_FUEL_TICK = 5.0  # seconds
 
 # Mob constants
 MOB_SIGHT      = TILE * 8     # px
-MOB_WANDER_SPD = 60           # px/s
-MOB_FLEE_SPD   = 275          # critter flee
-MOB_CHASE_SPD  = 237          # raider chase
+MOB_WANDER_SPD = 45           # px/s
+MOB_FLEE_SPD   = 155          # critter flee — slower than player (250), catchable
+MOB_CHASE_SPD  = 115          # raider chase — easy to outrun in open, dangerous when cornered
+MOB_LOST_TIME  = 3.5          # seconds before mob gives up without LOS
 MOB_WANDER_DUR = 3.0          # seconds moving
 MOB_PAUSE_DUR  = 1.0          # seconds paused
 RAIDER_CONTACT_DMG = 10       # per second to player
@@ -302,6 +303,8 @@ class MAHisLANDPane(tk.Canvas):
         self._swing_cd = 0.0
         self._swing_flash: Optional[tuple[float, float, float, float, float]] = None
         self._inv_open = False
+        self._build_menu_open = False
+        self._build_sel: Optional[str] = None   # blueprint queued for placement
         self._mobs: list[dict] = []
         self._spawn_acc = 0.0
         self._fuel_acc = 0.0
@@ -351,21 +354,22 @@ class MAHisLANDPane(tk.Canvas):
         if self._inv_open:
             self._handle_inv_click(event.x, event.y)
             return
-        # Hotbar slot 0 = fist/swing; slots 1-7 = build blueprints; slot 8 = food
-        sel = self._hotbar_sel
-        if sel == 0:
-            self._do_swing()
-        elif sel == 8:
-            self._eat_food()
-        elif 1 <= sel <= 7:
-            idx = sel - 1
-            if idx < len(_BUILD_HOTBAR):
-                self._do_place(_BUILD_HOTBAR[idx])
-        else:
-            self._do_swing()
+        if self._build_menu_open:
+            self._handle_build_click(event.x, event.y)
+            return
+        # Left-click always swings / attacks / harvests
+        self._do_swing()
 
     def _on_rclick(self, _event: tk.Event) -> None:
-        # Interact: deposit fuel into Hearth, eat food, etc.
+        if self._build_menu_open:
+            self._build_menu_open = False
+            return
+        if self._build_sel:
+            # Place queued blueprint in facing tile
+            self._do_place(self._build_sel)
+            self._build_sel = None
+            return
+        # Near a structure → interact; otherwise nothing
         self._do_interact()
 
     # ── Update ───────────────────────────────────────────────────────
@@ -379,10 +383,15 @@ class MAHisLANDPane(tk.Canvas):
 
         k = self._keys
 
-        # Toggle inventory
+        # Toggle inventory / build menu
         if "i" in k:
             k.discard("i")
             self._inv_open = not self._inv_open
+            self._build_menu_open = False
+        if "b" in k:
+            k.discard("b")
+            self._build_menu_open = not self._build_menu_open
+            self._inv_open = False
 
         # Hotbar number keys
         for n in range(1, 10):
@@ -475,17 +484,20 @@ class MAHisLANDPane(tk.Canvas):
             self._msg_ttl -= dt
 
     def _passable(self, wx: float, wy: float) -> bool:
-        # Check 4-corner radius
         r = TILE * 0.35
         for ox, oy in [(-r, -r), (r, -r), (-r, r), (r, r)]:
             t = self._tile_at(wx + ox, wy + oy)
             if t == T_WALL:
                 return False
-            # Structures that block
             tx = int((wx + ox) // TILE)
             ty = int((wy + oy) // TILE)
+            # Solid structures
             for s in self._structs:
-                if s["tx"] == tx and s["ty"] == ty and s["kind"] in ("wall", "spike"):
+                if s["tx"] == tx and s["ty"] == ty and s["kind"] in ("wall", "spike", "hearth", "bench", "crate"):
+                    return False
+            # Alive resource nodes
+            for node in self._nodes:
+                if node["hp"] > 0 and node["tx"] == tx and node["ty"] == ty:
                     return False
         return True
 
@@ -664,6 +676,25 @@ class MAHisLANDPane(tk.Canvas):
         self._gear.add(item)
         self._flash_msg(f"Crafted {item}!")
 
+    def _handle_build_click(self, cx: int, cy: int) -> None:
+        x0, y0 = self._build_menu_pos()
+        for i, kind in enumerate(_BUILD_HOTBAR):
+            by = y0 + 10 + i * 26
+            if x0 + 4 <= cx <= x0 + 196 and by <= cy <= by + 22:
+                recipe, _ = _STRUCTURES[kind]
+                can_afford = all(self._inv.get(r, 0) >= q for r, q in recipe.items())
+                if can_afford:
+                    self._build_sel = kind
+                    self._build_menu_open = False
+                    cost_str = " ".join(f"{q}{r[:2]}" for r, q in recipe.items())
+                    self._flash_msg(f"[{kind}] selected — RClick to place  ({cost_str})")
+                else:
+                    self._flash_msg(f"Can't afford {kind}")
+                return
+
+    def _build_menu_pos(self) -> tuple[int, int]:
+        return (self._vw - 210, 50)
+
     def _handle_inv_click(self, cx: int, cy: int) -> None:
         # Gear craft buttons in drawer
         x0, y0 = self._inv_drawer_pos()
@@ -703,6 +734,25 @@ class MAHisLANDPane(tk.Canvas):
                 if self._in_claim(tx, ty, s):
                     return True
         return False
+
+    def _has_los(self, x1: float, y1: float, x2: float, y2: float) -> bool:
+        dx, dy = x2 - x1, y2 - y1
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            return True
+        steps = max(2, int(dist / (TILE * 0.6)))
+        for i in range(1, steps):
+            t = i / steps
+            cx = int((x1 + dx * t) // TILE)
+            cy = int((y1 + dy * t) // TILE)
+            if cx < 0 or cy < 0 or cx >= W_TILES or cy >= H_TILES:
+                return False
+            if self._grid[cy][cx] == T_WALL:
+                return False
+            for node in self._nodes:
+                if node["hp"] > 0 and node["tx"] == cx and node["ty"] == cy:
+                    return False
+        return True
 
     def _eat_food(self) -> None:
         if self._inv.get("food", 0) <= 0:
@@ -746,7 +796,7 @@ class MAHisLANDPane(tk.Canvas):
                 "hp": hp, "max_hp": hp,
                 "state": "wander", "state_t": MOB_WANDER_DUR,
                 "vx": 0.0, "vy": 0.0,
-                "dmg_cd": 0.0,
+                "dmg_cd": 0.0, "lost_t": 0.0,
             })
             return
 
@@ -765,27 +815,37 @@ class MAHisLANDPane(tk.Canvas):
         dy = self._py - mob["y"]
         dist = math.hypot(dx, dy)
 
+        can_see = dist < MOB_SIGHT and self._has_los(mob["x"], mob["y"], self._px, self._py)
+
         if mob["kind"] == "critter":
-            if dist < MOB_SIGHT:
+            if can_see:
                 mob["state"] = "flee"
+                mob["lost_t"] = MOB_LOST_TIME
             elif mob["state"] == "flee":
-                mob["state"] = "wander"
-                mob["state_t"] = MOB_WANDER_DUR
+                mob["lost_t"] -= dt
+                if mob["lost_t"] <= 0:
+                    mob["state"] = "wander"
+                    mob["state_t"] = MOB_WANDER_DUR
+                    mob["vx"] = mob["vy"] = 0.0
 
             if mob["state"] == "flee":
-                # Flee directly away
                 if dist > 0:
-                    mob["vx"] = -(dx / dist) * MOB_FLEE_SPD
-                    mob["vy"] = -(dy / dist) * MOB_FLEE_SPD
+                    spd = MOB_FLEE_SPD * max(0.3, mob["lost_t"] / MOB_LOST_TIME)
+                    mob["vx"] = -(dx / dist) * spd
+                    mob["vy"] = -(dy / dist) * spd
             else:
                 self._wander_tick(mob, dt)
 
         else:  # raider
-            if dist < MOB_SIGHT:
+            if can_see:
                 mob["state"] = "chase"
-            elif mob["state"] == "chase" and dist > MOB_SIGHT * 1.5:
-                mob["state"] = "wander"
-                mob["state_t"] = MOB_WANDER_DUR
+                mob["lost_t"] = MOB_LOST_TIME
+            elif mob["state"] == "chase":
+                mob["lost_t"] -= dt
+                if mob["lost_t"] <= 0:
+                    mob["state"] = "wander"
+                    mob["state_t"] = MOB_WANDER_DUR
+                    mob["vx"] = mob["vy"] = 0.0
 
             if mob["state"] == "chase":
                 if dist > 0:
@@ -872,6 +932,8 @@ class MAHisLANDPane(tk.Canvas):
         self._draw_world()
         self._draw_player()
         self._draw_hud()
+        if self._build_menu_open:
+            self._draw_build_menu()
         if self._inv_open:
             self._draw_inventory()
         if self._state == "dead":
@@ -1017,23 +1079,32 @@ class MAHisLANDPane(tk.Canvas):
         zone = "CLAIMED" if self._claimed(ptx, pty) else "WILD"
         self.create_text(8, 38, anchor="nw", text=zone, fill=_HUD, font=("Consolas", 7))
 
-        # Hotbar (bottom centre)
-        slots = ["[fist]"] + [_BUILD_HOTBAR[i] if i < len(_BUILD_HOTBAR) else "---"
-                               for i in range(7)] + ["[eat]"]
-        bsize = 32
-        total = 9 * (bsize + 2)
-        hx = self._vw // 2 - total // 2
+        # Hotbar — fist | food count | build indicator
+        bsize = 36
+        slots_data = [
+            ("FIST",  _BRIGHT),
+            (f"FOOD\n{self._inv.get('food', 0)}", _MID),
+        ]
+        total_w = len(slots_data) * (bsize + 4)
+        hx = self._vw // 2 - total_w // 2
         hy = self._vh - bsize - 8
-        for i, label in enumerate(slots):
-            x = hx + i * (bsize + 2)
+        for i, (label, col) in enumerate(slots_data):
+            x = hx + i * (bsize + 4)
             sel = i == self._hotbar_sel
-            bg = _CHROME if sel else _BG
             self.create_rectangle(x, hy, x + bsize, hy + bsize,
-                                  fill=bg, outline=_BRIGHT if sel else _BORDER)
-            short = label[:5]
+                                  fill=_CHROME if sel else _BG,
+                                  outline=_BRIGHT if sel else _BORDER)
             self.create_text(x + bsize // 2, hy + bsize // 2,
-                             text=short, fill=_BRIGHT if sel else _DIM,
-                             font=("Consolas", 6))
+                             text=label, fill=col if sel else _DIM,
+                             font=("Consolas", 6), justify="center")
+        # Blueprint indicator
+        if self._build_sel:
+            bx = hx + len(slots_data) * (bsize + 4) + 8
+            self.create_rectangle(bx, hy, bx + 60, hy + bsize,
+                                  fill=_CHROME, outline=_BRIGHT)
+            self.create_text(bx + 30, hy + bsize // 2,
+                             text=self._build_sel[:7], fill=_BRIGHT,
+                             font=("Consolas", 6), justify="center")
 
         # Gear indicators
         gear_x = self._vw - 8
@@ -1050,7 +1121,7 @@ class MAHisLANDPane(tk.Canvas):
 
         # Controls hint
         self.create_text(self._vw // 2, self._vh - bsize - 20, anchor="s",
-                         text="WASD move | 1=fist 2-8=build 9=eat | LClick act | RClick refuel/interact | I inventory | ESC exit",
+                         text="WASD move | LClick swing | B build menu | RClick place/interact | I inventory | ESC exit",
                          fill=_DIM, font=("Consolas", 7))
 
     def _bar(self, x: int, y: int, w: int, h: int, frac: float,
@@ -1061,6 +1132,27 @@ class MAHisLANDPane(tk.Canvas):
             self.create_rectangle(x, y, x + fw, y + h, fill=color, outline="")
         self.create_text(x + w + 4, y, anchor="nw",
                          text=label, fill=_DIM, font=("Consolas", 7))
+
+    def _draw_build_menu(self) -> None:
+        x0, y0 = self._build_menu_pos()
+        h = 20 + len(_BUILD_HOTBAR) * 26
+        self.create_rectangle(x0, y0, x0 + 200, y0 + h,
+                              fill=_BG, outline=_BORDER, width=1)
+        self.create_text(x0 + 100, y0 + 8, text="BUILD  [B] close",
+                         fill=_BRIGHT, font=("Consolas", 8, "bold"), anchor="n")
+        for i, kind in enumerate(_BUILD_HOTBAR):
+            recipe, _ = _STRUCTURES[kind]
+            by = y0 + 20 + i * 26
+            can = all(self._inv.get(r, 0) >= q for r, q in recipe.items())
+            col = _BRIGHT if can else _DIM
+            sel = self._build_sel == kind
+            bg = _CHROME if sel else _BG
+            self.create_rectangle(x0 + 4, by, x0 + 196, by + 22,
+                                  fill=bg, outline=_BORDER if sel else "")
+            cost = " ".join(f"{q}{r[:2]}" for r, q in recipe.items())
+            self.create_text(x0 + 10, by + 11, anchor="w",
+                             text=f"{kind:<10} {cost}",
+                             fill=col, font=("Consolas", 7))
 
     def _draw_inventory(self) -> None:
         x0, y0 = self._inv_drawer_pos()
