@@ -259,72 +259,13 @@ class MAHisLANDPane(tk.Canvas):
         self._vh = self.winfo_height() or 408
         self.bind("<Configure>", self._on_resize)
 
-        # World
-        self._grid, self._nodes = _gen_world()
-
-        # Player (world px coords)
-        cx = (W_TILES // 2) * TILE + TILE // 2
-        cy = (H_TILES // 2) * TILE + TILE // 2
-        self._px = float(cx)
-        self._py = float(cy)
-        self._angle = 0.0          # radians, facing direction
-
-        # Camera (top-left world px)
-        self._camx = self._px - self._vw / 2
-        self._camy = self._py - self._vh / 2
-
-        # Input
+        # Input (persists across resets)
         self._keys: set[str] = set()
-        self._mx = 0.0   # mouse world x
-        self._my = 0.0   # mouse world y
-
-        # Player stats
-        self._hp = float(P_HP_MAX)
-        self._hunger = float(P_HN_MAX)
-
-        # Inventory {resource: qty}
-        self._inv: dict[str, int] = {
-            "wood": 0, "stone": 0, "metal": 0, "food": 0, "leather": 0
-        }
-        # Gear slots
-        self._gear: set[str] = set()   # "gather_tool", "weapon", "tunic"
-
-        # Structures placed: list of {tx, ty, kind, hp, max_hp, fuel(hearths)}
-        self._structs: list[dict] = []
-
-        # Hotbar: 9 slots, mix of items and build blueprints
-        # slot 0 = swing/fist  slots 1-6 = build blueprints  7-8 = consumable
-        self._hotbar_sel = 0
-
-        # Swing cooldown
-        self._swing_cd = 0.0
-        self._swing_flash: Optional[tuple[float, float, float, float, float]] = None  # ox,oy,ax,ay,ttl
-
-        # Inventory drawer open
-        self._inv_open = False
-
-        # Mobs: list of {kind, x, y, hp, max_hp, state, state_t, vx, vy, dmg_cd}
-        # state: "wander" | "pause" | "flee" | "chase"
-        self._mobs: list[dict] = []
-        self._spawn_acc = 0.0
-
-        # Hearth fuel/claim tick accumulator
-        self._fuel_acc = 0.0
-
-        # Hunger/health tick
-        self._hunger_acc = 0.0
-
-        # Node respawn accumulator (uses delta time per node via node["respawn"])
-
-        # State
-        self._state = "play"   # play | dead
-
-        # Msg overlay (top-centre status line)
-        self._msg = ""
-        self._msg_ttl = 0.0
-
-        # Time tracking
+        self._mx = 0.0
+        self._my = 0.0
         self._last_t: Optional[float] = None
+
+        self._reset_world()
 
         # Bindings
         self.bind("<KeyPress>",   lambda e: self._keys.add(e.keysym.lower()))
@@ -338,6 +279,36 @@ class MAHisLANDPane(tk.Canvas):
 
         self._tick_id: Optional[str] = None
         self._loop()
+
+    # ── World reset (new game / respawn) ─────────────────────────────
+
+    def _reset_world(self) -> None:
+        self._grid, self._nodes = _gen_world()
+        cx = (W_TILES // 2) * TILE + TILE // 2
+        cy = (H_TILES // 2) * TILE + TILE // 2
+        self._px = float(cx)
+        self._py = float(cy)
+        self._angle = 0.0
+        self._camx = self._px - getattr(self, "_vw", 540) / 2
+        self._camy = self._py - getattr(self, "_vh", 408) / 2
+        self._hp = float(P_HP_MAX)
+        self._hunger = float(P_HN_MAX)
+        self._inv: dict[str, int] = {
+            "wood": 0, "stone": 0, "metal": 0, "food": 0, "leather": 0
+        }
+        self._gear: set[str] = set()
+        self._structs: list[dict] = []
+        self._hotbar_sel = 0
+        self._swing_cd = 0.0
+        self._swing_flash: Optional[tuple[float, float, float, float, float]] = None
+        self._inv_open = False
+        self._mobs: list[dict] = []
+        self._spawn_acc = 0.0
+        self._fuel_acc = 0.0
+        self._hunger_acc = 0.0
+        self._state = "play"
+        self._msg = ""
+        self._msg_ttl = 0.0
 
     # ── Resize ───────────────────────────────────────────────────────
 
@@ -401,6 +372,9 @@ class MAHisLANDPane(tk.Canvas):
 
     def _update(self, dt: float) -> None:
         if self._state == "dead":
+            if "r" in self._keys:
+                self._keys.discard("r")
+                self._reset_world()
             return
 
         k = self._keys
@@ -599,7 +573,29 @@ class MAHisLANDPane(tk.Canvas):
                         self._flash_msg("No wood to deposit")
                     return
                 elif s["kind"] == "crate":
-                    self._flash_msg("Crate: storage (coming soon)")
+                    # Deposit all carried resources into crate
+                    store = s.setdefault("store", {})
+                    deposited = []
+                    for res in list(self._inv):
+                        qty = self._inv.get(res, 0)
+                        if qty > 0:
+                            store[res] = store.get(res, 0) + qty
+                            self._inv[res] = 0
+                            deposited.append(f"{qty} {res}")
+                    if deposited:
+                        self._flash_msg("Stored: " + ", ".join(deposited))
+                    else:
+                        # Withdraw everything from crate
+                        withdrawn = []
+                        for res, qty in list(store.items()):
+                            if qty > 0:
+                                self._inv[res] = self._inv.get(res, 0) + qty
+                                withdrawn.append(f"{qty} {res}")
+                        store.clear()
+                        if withdrawn:
+                            self._flash_msg("Retrieved: " + ", ".join(withdrawn))
+                        else:
+                            self._flash_msg("Crate is empty")
                     return
 
     def _do_place(self, kind: str) -> None:
@@ -901,6 +897,30 @@ class MAHisLANDPane(tk.Canvas):
                 self.create_rectangle(sx, sy, sx + TILE - 1, sy + TILE - 1,
                                       fill=bg, outline="")
 
+        # Claim zone border — bright edge on claimed tiles that border unclaimed
+        for s in self._structs:
+            if s["kind"] != "hearth" or not s.get("claimed"):
+                continue
+            hx, hy = s["tx"], s["ty"]
+            for ty in range(max(1, hy - HEARTH_RADIUS - 1),
+                            min(H_TILES - 1, hy + HEARTH_RADIUS + 2)):
+                for tx in range(max(1, hx - HEARTH_RADIUS - 1),
+                                min(W_TILES - 1, hx + HEARTH_RADIUS + 2)):
+                    if not self._in_claim(tx, ty, s):
+                        continue
+                    # Only draw edge tiles (at least one neighbour unclaimed)
+                    is_edge = any(
+                        not self._in_claim(tx + ox, ty + oy, s)
+                        for ox, oy in ((1,0),(-1,0),(0,1),(0,-1))
+                    )
+                    if not is_edge:
+                        continue
+                    ex = tx * TILE - self._camx
+                    ey = ty * TILE - self._camy
+                    if -TILE < ex < self._vw + TILE and -TILE < ey < self._vh + TILE:
+                        self.create_rectangle(ex, ey, ex + TILE - 1, ey + TILE - 1,
+                                              outline=_MID, fill="", width=1)
+
         # Nodes
         for node in self._nodes:
             if node["hp"] <= 0:
@@ -930,6 +950,11 @@ class MAHisLANDPane(tk.Canvas):
                     fuel = s.get("fuel", 0)
                     self.create_text(sx + TILE // 2, sy + TILE // 2,
                                      text=str(fuel), fill=_HUD, font=("Consolas", 7))
+                elif s["kind"] == "crate":
+                    total = sum(s.get("store", {}).values())
+                    if total:
+                        self.create_text(sx + TILE // 2, sy + TILE // 2,
+                                         text=str(total), fill=_HUD, font=("Consolas", 7))
 
         # Mobs
         for mob in self._mobs:
@@ -1078,7 +1103,7 @@ class MAHisLANDPane(tk.Canvas):
                               fill=_BG, outline=_BORDER, width=1)
         self.create_text(cx, cy - 20, text="YOU DIED",
                          fill=_BRIGHT, font=("Consolas", 18, "bold"))
-        self.create_text(cx, cy + 10, text="[ESC] Exit to KleinOS",
+        self.create_text(cx, cy + 10, text="[R] New world   [ESC] Exit",
                          fill=_MID, font=("Consolas", 9))
 
 
