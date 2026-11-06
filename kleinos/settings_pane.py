@@ -168,6 +168,34 @@ class SettingsPane(tk.Frame):
     # ── Display tab ──────────────────────────────────────────────────
 
     def _build_display_tab(self, parent: tk.Frame) -> None:
+        # ── PC Window Size ──────────────────────────────────────────────
+        tk.Label(parent, text="PC WINDOW SIZE",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 2))
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
+
+        self._size_btns: dict[str, tk.Button] = {}
+        current_size = self._cfg.get("pc_size", "medium")
+        for key, label in (("small", "Small  (65%)"), ("medium", "Medium  (100%)"), ("large", "Large  (130%)")):
+            is_sel = key == current_size
+            btn = tk.Button(
+                parent,
+                text=f"{'● ' if is_sel else '○ '}{label}",
+                command=lambda k=key: self._select_pc_size(k),
+                bg=_BTN_ACT if is_sel else _BTN_BG,
+                fg=_TEXT_FG,
+                activebackground=_BTN_ACT, activeforeground=_TEXT_HI,
+                font=_FONT if is_sel else _FONT_SM,
+                relief="flat", anchor="w", padx=12, pady=4, bd=0, cursor="hand2",
+            )
+            btn.pack(fill="x", pady=1)
+            self._size_btns[key] = btn
+
+        tk.Label(parent, text="Takes effect on next PC open",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 10))
+
+        # ── Phosphor Color ──────────────────────────────────────────────
         tk.Label(parent, text="PHOSPHOR COLOR",
                  bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
                  ).pack(fill="x", pady=(4, 2))
@@ -203,6 +231,19 @@ class SettingsPane(tk.Frame):
             activeforeground=_TEXT_HI, font=_FONT,
             relief="flat", padx=12, pady=4, bd=0, cursor="hand2",
         ).pack(anchor="w", pady=(6, 0))
+
+    def _select_pc_size(self, key: str) -> None:
+        if key == self._cfg.get("pc_size", "medium"):
+            return
+        self._cfg["pc_size"] = key
+        _config.save(self._cfg)
+        for k, btn in self._size_btns.items():
+            is_sel = k == key
+            btn.configure(
+                text=f"{'● ' if is_sel else '○ '}{k.capitalize()+'  (65%)' if k=='small' else k.capitalize()+'  (100%)' if k=='medium' else k.capitalize()+'  (130%)'}",
+                bg=_BTN_ACT if is_sel else _BTN_BG,
+                font=_FONT_B if is_sel else _FONT_SM,
+            )
 
     def _select_palette(self, key: str) -> None:
         current = self._cfg.get("palette", "green")

@@ -45,8 +45,9 @@ _FG        = "#00cc33"
 _DIM       = "#005500"
 _CANVAS_BG = "#000000"
 
-_IMG_ASPECT = 240 / 320   # 4:3 — height = width × this
-_IMG_MAX_H  = 400         # never taller than this (leaves room for transcript)
+_IMG_ASPECT  = 240 / 320   # 4:3 — height = width × this
+_IMG_MAX_H   = 400         # hard ceiling
+_IMG_WIN_PCT = 0.30        # never taller than this fraction of the toplevel window
 
 
 def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
@@ -142,9 +143,11 @@ class RoomImagePanel(tk.Frame):
     # ── Resize ────────────────────────────────────────────────────────
 
     def _canvas_h(self) -> int:
-        """Desired canvas height: width × 4:3 aspect, capped at _IMG_MAX_H."""
+        """Desired canvas height: 4:3 of width, capped by window fraction and hard ceiling."""
         w = self._canvas.winfo_width() or 320
-        return min(int(w * _IMG_ASPECT), _IMG_MAX_H)
+        win_h = self.winfo_toplevel().winfo_height()
+        win_cap = int(win_h * _IMG_WIN_PCT) if win_h > 50 else _IMG_MAX_H
+        return min(int(w * _IMG_ASPECT), _IMG_MAX_H, max(80, win_cap))
 
     def _on_resize(self, _=None) -> None:
         new_h = self._canvas_h()

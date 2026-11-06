@@ -49,6 +49,7 @@ class RetroMonitorFrame(tk.Frame):
         bezel: str = "green",
         bezel_path: Optional[Path] = None,
         rect_path: Optional[Path] = None,
+        scale: float = 1.0,
         **kw,
     ):
         super().__init__(parent, bd=0, highlightthickness=0, **kw)
@@ -57,8 +58,16 @@ class RetroMonitorFrame(tk.Frame):
         rct = rect_path or (_ASSETS / "screen_rect.json")
 
         rect = self._load_rect(rct)
-        canvas_w = rect.get("canvas_w", 480)
-        canvas_h = rect.get("canvas_h", 360)
+        s = max(0.3, float(scale))
+        canvas_w = int(rect.get("canvas_w", 480) * s)
+        canvas_h = int(rect.get("canvas_h", 360) * s)
+        # Scale rect coordinates proportionally
+        rect = {
+            "x":      int(rect["x"]      * s),
+            "y":      int(rect["y"]      * s),
+            "width":  int(rect["width"]  * s),
+            "height": int(rect["height"] * s),
+        }
 
         self._canvas = tk.Canvas(
             self,

@@ -149,6 +149,8 @@ class KleinPC:
         else:
             self._sync_layout_with_pool()
 
+        _scale = _config._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
+
         self._window = tk.Toplevel(root)
         self._window.title(title)
         self._window.configure(bg=_WIN_BG)
@@ -158,6 +160,7 @@ class KleinPC:
             self._window,
             bezel_path=_ASSETS / "monitor_widescreen.png",
             rect_path=_ASSETS / "screen_rect_widescreen.json",
+            scale=_scale,
         )
         self._monitor.pack(padx=10, pady=10)
 

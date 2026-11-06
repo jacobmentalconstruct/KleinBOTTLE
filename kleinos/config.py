@@ -13,8 +13,15 @@ from pathlib import Path
 
 _PATH = Path(__file__).resolve().parent.parent / "data" / "kleinos_config.json"
 
+_PC_SIZES = {
+    "small":  0.65,
+    "medium": 1.0,
+    "large":  1.3,
+}
+
 _DEFAULTS: dict = {
     "palette": "green",
+    "pc_size": "medium",
     "audio": {
         "enabled": True,
         "sounds": {

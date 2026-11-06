@@ -206,7 +206,8 @@ def _show_adventure(root: tk.Tk) -> None:
 def main() -> None:
     root = tk.Tk()
     root.title("KleinBOTTLE")
-    root.geometry("960x680")
+    root.geometry("960x800")
+    root.minsize(860, 680)
     root.configure(bg=_BG)
     _show_title(root)
     root.mainloop()
