@@ -7,3 +7,6 @@ __pycache__/
 .imports-to-consider/
 .microservice-library/
 .project-mapper/
+
+# MAHisLAND runtime data
+data/mahisland_save.json
