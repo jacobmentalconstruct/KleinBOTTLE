@@ -13,7 +13,7 @@ No Tkinter knowledge needed to write an app.
 from __future__ import annotations
 
 import tkinter as tk
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from kleinos.klein_app import KleinApp
@@ -23,6 +23,8 @@ _CHROME   = "#003311"
 _BORDER   = "#005522"
 _BTN_BG   = "#0a2010"
 _BTN_ACT  = "#0d3a1a"
+_BTN_SEL  = "#0a4020"   # keyboard-selected button
+_BTN_SEL_FG = "#aaffaa"
 _TEXT_FG  = "#00dd33"
 _STATUS   = "#050e05"
 _FONT     = ("Consolas", 9)
@@ -38,9 +40,18 @@ class AppPane(tk.Frame):
         pane.pack(fill="both", expand=True)
     """
 
-    def __init__(self, parent: tk.Widget, *, app: "KleinApp"):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        *,
+        app: "KleinApp",
+        on_exit: Optional[Callable[[], None]] = None,
+    ):
         super().__init__(parent, bg=_BG, bd=0, highlightthickness=0)
         self._app = app
+        self._on_exit = on_exit
+        self._sel_idx: int = -1
+        self._btn_list: list[tuple[tk.Button, str, Callable]] = []
         self._build()
 
     # ------------------------------------------------------------------
@@ -114,9 +125,16 @@ class AppPane(tk.Frame):
         # Welcome
         self._output(f"=== {self._app.title} ===\nSelect a command below.")
 
+        # Keyboard navigation
+        self.configure(takefocus=True)
+        self._bind_keys()
+        self.after(50, self.focus_set)
+
     def _rebuild_buttons(self) -> None:
         for w in self._btn_frame.winfo_children():
             w.destroy()
+        self._btn_list = []
+        self._sel_idx = -1
         for label, cmd in self._app.commands():
             btn = tk.Button(
                 self._btn_frame,
@@ -134,6 +152,45 @@ class AppPane(tk.Frame):
                 bd=0,
             )
             btn.pack(side="left", padx=2, pady=2)
+            self._btn_list.append((btn, label, cmd))
+        if self._btn_list:
+            self._highlight(0)
+
+    # ------------------------------------------------------------------
+    # Keyboard navigation
+    # ------------------------------------------------------------------
+
+    def _bind_keys(self) -> None:
+        for key in ("<Up>", "<w>", "<Left>", "<a>"):
+            self.bind(key, lambda _: self._nav(-1))
+        for key in ("<Down>", "<s>", "<Right>", "<d>"):
+            self.bind(key, lambda _: self._nav(1))
+        for key in ("<Return>", "<space>"):
+            self.bind(key, lambda _: self._activate())
+        self.bind("<Escape>", lambda _: self._escape())
+
+    def _nav(self, delta: int) -> None:
+        if not self._btn_list:
+            return
+        n = len(self._btn_list)
+        self._highlight((self._sel_idx + delta) % n)
+
+    def _activate(self) -> None:
+        if 0 <= self._sel_idx < len(self._btn_list):
+            btn, label, cmd = self._btn_list[self._sel_idx]
+            self._run(label, cmd)
+
+    def _escape(self) -> None:
+        if self._on_exit:
+            self._on_exit()
+
+    def _highlight(self, idx: int) -> None:
+        for i, (btn, _lbl, _cmd) in enumerate(self._btn_list):
+            if i == idx:
+                btn.configure(bg=_BTN_SEL, fg=_BTN_SEL_FG)
+            else:
+                btn.configure(bg=_BTN_BG, fg=_TEXT_FG)
+        self._sel_idx = idx
 
     # ------------------------------------------------------------------
     # Internals

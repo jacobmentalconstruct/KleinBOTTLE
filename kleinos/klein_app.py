@@ -28,6 +28,7 @@ class KleinApp:
     Minimal base class.  Subclass and override title + commands().
     """
     title: str = "App"
+    description: str = ""
 
     def commands(self) -> list[tuple[str, Callable[[], str]]]:
         """Return a list of (label, callable) pairs."""
@@ -48,6 +49,7 @@ class KleinGame:
     Call on_exit() when the player quits (e.g. ESC key).
     """
     title: str = "Game"
+    description: str = ""
 
     def create(self, parent: "tk.Widget", on_exit: "Callable[[], None]") -> "tk.Widget":
         raise NotImplementedError
@@ -66,6 +68,7 @@ class KleinChat:
     create() must return a tk.Widget that fills the content area.
     """
     title: str = "Chat"
+    description: str = ""
 
     def create(self, parent: "tk.Widget", on_exit: "Callable[[], None]") -> "tk.Widget":
         raise NotImplementedError

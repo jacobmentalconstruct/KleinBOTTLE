@@ -224,10 +224,10 @@ class SpaceInvadersPane(tk.Canvas):
         if self._invincible > 0:
             self._invincible -= 1
 
-        # Player movement
-        if "Left" in self._keys:
+        # Player movement  (WASD mirrors arrow keys)
+        if "Left" in self._keys or "a" in self._keys:
             self._px = max(16, self._px - 5)
-        if "Right" in self._keys:
+        if "Right" in self._keys or "d" in self._keys:
             self._px = min(self.W - 16, self._px + 5)
 
         # Fire
@@ -336,7 +336,7 @@ class SpaceInvadersPane(tk.Canvas):
 
         # Controls
         self.create_text(self.W // 2, self.H - 11, anchor="center",
-                         text="[←][→] MOVE    [SPACE] FIRE    [ESC] EXIT",
+                         text="[←/A][→/D] MOVE    [SPACE] FIRE    [ESC] EXIT",
                          fill=_GD, font=("Consolas", 8))
 
         # Invaders
@@ -450,6 +450,7 @@ class SpaceInvadersPane(tk.Canvas):
 
 class SpaceInvaders(KleinGame):
     title = "Space Invaders"
+    description = "Classic arcade shoot-'em-up. Blast the invaders before they land."
 
     def create(self, parent: tk.Widget, on_exit: Callable) -> tk.Widget:
         return SpaceInvadersPane(parent, on_exit=on_exit)

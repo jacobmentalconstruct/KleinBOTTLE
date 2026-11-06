@@ -163,6 +163,7 @@ from kleinos.klein_app import KleinChat  # noqa: E402
 
 class WorldBuilder(KleinChat):
     title = "World Builder"
+    description = "Design and edit rooms, items, and connections for the game world."
 
     def __init__(self, world_path: Path = _DEFAULT_WORLD):
         self._world_path = world_path
@@ -173,6 +174,7 @@ class WorldBuilder(KleinChat):
 
 class TextAdventure(KleinChat):
     title = "KleinBOTTLE"
+    description = "Play the KleinBOTTLE text adventure."
 
     def __init__(self, world_path: Path = _DEFAULT_WORLD):
         self._world_path = world_path

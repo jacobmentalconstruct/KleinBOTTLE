@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import tkinter as tk
 from pathlib import Path
 from typing import Callable, Optional
@@ -37,6 +38,7 @@ from kleinos.retro_monitor_frame import RetroMonitorFrame
 from kleinos.terminal_pane import TerminalPane
 
 _ASSETS = Path(__file__).parent / "assets"
+_LAYOUT_PATH = Path(__file__).resolve().parent.parent / "data" / "kleinos_layout.json"
 
 # ── Sidebar palette ──────────────────────────────────────────────────
 _S_BG      = "#050a05"
@@ -57,6 +59,48 @@ _CONTENT_BG = "#010a01"
 _WIN_BG     = "#050508"
 
 
+# ── Tooltip ──────────────────────────────────────────────────────────
+
+class _Tooltip:
+    """Hover tooltip for sidebar buttons."""
+
+    def __init__(self, widget: tk.Widget, text: str) -> None:
+        self._widget = widget
+        self._text = text
+        self._win: Optional[tk.Toplevel] = None
+        widget.bind("<Enter>", self._show, add=True)
+        widget.bind("<Leave>", self._hide, add=True)
+
+    def _show(self, event: tk.Event) -> None:
+        if not self._text or self._win:
+            return
+        x = event.x_root + 14
+        y = event.y_root - 2
+        self._win = tk.Toplevel(self._widget)
+        self._win.wm_overrideredirect(True)
+        self._win.wm_geometry(f"+{x}+{y}")
+        self._win.wm_attributes("-topmost", True)
+        tk.Label(
+            self._win,
+            text=self._text,
+            bg="#0a1a0a",
+            fg="#aaffaa",
+            font=("Consolas", 8),
+            relief="flat",
+            padx=8,
+            pady=4,
+            wraplength=220,
+            justify="left",
+        ).pack()
+
+    def _hide(self, event: Optional[tk.Event] = None) -> None:
+        if self._win:
+            self._win.destroy()
+            self._win = None
+
+
+# ── KleinPC ──────────────────────────────────────────────────────────
+
 class KleinPC:
     """
     Single in-game computer window — sidebar + content inside widescreen bezel.
@@ -64,9 +108,12 @@ class KleinPC:
     Parameters
     ----------
     root        : Tk root or any Toplevel
-    apps        : list of KleinApp instances for the Apps section
+    apps        : list of KleinApp/KleinChat instances
+    games       : list of KleinGame instances
+    chats       : list of KleinChat instances (deprecated; use apps)
     executor    : callable(text) -> str for the terminal; None = built-in shell
     title       : window title
+    layout_path : path to kleinos_layout.json
     """
 
     def __init__(
@@ -78,20 +125,35 @@ class KleinPC:
         chats: Optional[list[KleinChat]] = None,
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
+        layout_path: Path = _LAYOUT_PATH,
     ):
         self._root = root
         self._apps: list = apps or []
-        self._games = games or []
-        self._chats = chats or []
+        self._games: list = games or []
+        self._chats: list = chats or []
         self._executor = executor
+        self._layout_path = layout_path
         self._active_btn: Optional[tk.Button] = None
+        self._active_title: Optional[str] = None
+        self._item_btns: dict[str, tk.Button] = {}
+
+        # Title → item lookup
+        self._item_pool: dict[str, object] = {}
+        for item in self._apps + self._games + self._chats:
+            self._item_pool[item.title] = item
+
+        # Load or initialise layout
+        self._layout = self._load_layout()
+        if not self._layout.get("categories"):
+            self._init_default_layout()
+        else:
+            self._sync_layout_with_pool()
 
         self._window = tk.Toplevel(root)
         self._window.title(title)
         self._window.configure(bg=_WIN_BG)
         self._window.resizable(False, False)
 
-        # The widescreen bezel is the only direct child
         self._monitor = RetroMonitorFrame(
             self._window,
             bezel_path=_ASSETS / "monitor_widescreen.png",
@@ -99,7 +161,6 @@ class KleinPC:
         )
         self._monitor.pack(padx=10, pady=10)
 
-        # Inside .screen: sidebar on the left, content on the right
         self._monitor.screen.configure(bg=_CONTENT_BG)
         self._build_sidebar(self._monitor.screen)
         self._build_content(self._monitor.screen)
@@ -108,7 +169,62 @@ class KleinPC:
         self._window.withdraw()
 
     # ──────────────────────────────────────────────────────────────────
-    # Sidebar
+    # Layout persistence
+    # ──────────────────────────────────────────────────────────────────
+
+    def _load_layout(self) -> dict:
+        try:
+            return json.loads(self._layout_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"categories": []}
+
+    def _save_layout(self) -> None:
+        cats = []
+        for cat in self._layout["categories"]:
+            cats.append({
+                "id":       cat["id"],
+                "label":    cat["label"],
+                "expanded": cat["expanded"],
+                "items":    list(cat["items"]),
+            })
+        try:
+            self._layout_path.write_text(
+                json.dumps({
+                    "top_level_items": list(self._layout.get("top_level_items", [])),
+                    "categories": cats,
+                }, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+    def _init_default_layout(self) -> None:
+        app_chat_titles = [i.title for i in self._apps + self._chats]
+        game_titles     = [i.title for i in self._games]
+        cats = []
+        if app_chat_titles:
+            cats.append({"id": "cat-apps", "label": "Apps",
+                         "expanded": True, "items": app_chat_titles})
+        if game_titles:
+            cats.append({"id": "cat-games", "label": "Games",
+                         "expanded": True, "items": game_titles})
+        self._layout = {"top_level_items": [], "categories": cats}
+        self._save_layout()
+
+    def _sync_layout_with_pool(self) -> None:
+        """Add items registered in code but absent from the saved layout to top level."""
+        if "top_level_items" not in self._layout:
+            self._layout["top_level_items"] = []
+        all_listed: set[str] = set(self._layout["top_level_items"])
+        for cat in self._layout["categories"]:
+            all_listed.update(cat["items"])
+        missing = [t for t in self._item_pool if t not in all_listed]
+        if missing:
+            self._layout["top_level_items"].extend(missing)
+            self._save_layout()
+
+    # ──────────────────────────────────────────────────────────────────
+    # Sidebar construction
     # ──────────────────────────────────────────────────────────────────
 
     def _build_sidebar(self, parent: tk.Widget) -> None:
@@ -116,136 +232,112 @@ class KleinPC:
         sb.pack(side="left", fill="y")
         sb.pack_propagate(False)
 
-        # Vertical separator
         tk.Frame(parent, bg=_S_SEP, width=1).pack(side="left", fill="y")
 
         # Header
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-        tk.Label(
-            sb, text="KleinOS", bg=_S_HEAD, fg=_S_FG_ON,
-            font=_S_FONT_H, pady=7,
-        ).pack(fill="x")
+        tk.Label(sb, text="KleinOS", bg=_S_HEAD, fg=_S_FG_ON,
+                 font=_S_FONT_H, pady=7).pack(fill="x")
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
 
-        # Terminal
-        self._btn_terminal = self._nav_btn(sb, "▶  Terminal", self._select_terminal)
-        tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-
-        # Apps section — container keeps toggle + items as one unit so their
-        # position in the sidebar never shifts when items are shown/hidden
-        self._apps_expanded = True
-        apps_section = tk.Frame(sb, bg=_S_BG)
-        apps_section.pack(fill="x")
-        self._apps_toggle_btn = self._nav_btn(
-            apps_section, "▼  Apps", self._toggle_apps, dim=True
+        # Terminal — fixed, never in a category
+        self._btn_terminal = self._nav_btn(
+            sb, "▶  Terminal", self._select_terminal,
+            tooltip="Open the KleinOS terminal",
         )
-        self._apps_frame = tk.Frame(apps_section, bg=_S_BG)
-        self._apps_frame.pack(fill="x")
-        self._app_btns: list[tuple[tk.Button, KleinApp]] = []
-        for app in self._apps:
-            self._add_app_btn(app)
-
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
 
-        # Games section (only shown when games are registered)
-        if self._games:
-            self._games_expanded = True
-            games_section = tk.Frame(sb, bg=_S_BG)
-            games_section.pack(fill="x")
-            self._games_toggle_btn = self._nav_btn(
-                games_section, "▼  Games", self._toggle_games, dim=True
-            )
-            self._games_frame = tk.Frame(games_section, bg=_S_BG)
-            self._games_frame.pack(fill="x")
-            self._game_btns: list[tuple[tk.Button, object]] = []
-            for game in self._games:
-                self._add_game_btn(game)
-            tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
+        # Dynamic category body — rebuilt when layout changes
+        self._sb_body = tk.Frame(sb, bg=_S_BG)
+        self._sb_body.pack(fill="x")
+        self._populate_categories()
 
-        # Chat section (only shown when chats are registered)
-        if self._chats:
-            self._chats_expanded = True
-            chats_section = tk.Frame(sb, bg=_S_BG)
-            chats_section.pack(fill="x")
-            self._chats_toggle_btn = self._nav_btn(
-                chats_section, "▼  Chat", self._toggle_chats, dim=True
-            )
-            self._chats_frame = tk.Frame(chats_section, bg=_S_BG)
-            self._chats_frame.pack(fill="x")
-            self._chat_btns: list[tuple[tk.Button, KleinChat]] = []
-            for chat in self._chats:
-                self._add_chat_btn(chat)
-            tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-
-        # Settings
-        self._btn_settings = self._nav_btn(sb, "⚙  Settings", self._select_settings)
+        # Footer
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-
+        self._btn_settings = self._nav_btn(
+            sb, "⚙  Settings", self._select_settings,
+            tooltip="Manage categories and preferences",
+        )
+        tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
         tk.Frame(sb, bg=_S_BG).pack(fill="both", expand=True)
 
-    def _nav_btn(
-        self,
-        parent: tk.Widget,
-        label: str,
-        command: Callable,
-        dim: bool = False,
-    ) -> tk.Button:
-        fg = _S_FG_DIM if dim else _S_FG
+    def _populate_categories(self) -> None:
+        """Rebuild the category section from the current layout."""
+        # Identify if an item button is currently active
+        active_title: Optional[str] = None
+        for title, btn in self._item_btns.items():
+            if btn is self._active_btn:
+                active_title = title
+                break
+
+        for w in self._sb_body.winfo_children():
+            w.destroy()
+        self._item_btns.clear()
+
+        # Clear active_btn only if it was an item button (now destroyed)
+        btn_terminal = getattr(self, "_btn_terminal", None)
+        btn_settings = getattr(self, "_btn_settings", None)
+        if self._active_btn not in (btn_terminal, btn_settings):
+            self._active_btn = None
+
+        # Top-level (ungrouped) items — same visual level as Terminal
+        for title in self._layout.get("top_level_items", []):
+            item = self._item_pool.get(title)
+            if item is not None:
+                self._add_toplevel_btn(self._sb_body, item)
+
+        for cat in self._layout["categories"]:
+            self._add_category_section(cat)
+
+        # Restore highlight on rebuilt item button
+        if active_title and active_title in self._item_btns:
+            self._active_btn = self._item_btns[active_title]
+            self._active_btn.configure(bg=_S_ACT, fg=_S_FG_ON)
+
+    def _add_category_section(self, cat: dict) -> None:
+        arrow = "▼" if cat["expanded"] else "▶"
+        section = tk.Frame(self._sb_body, bg=_S_BG)
+        section.pack(fill="x")
+
+        toggle_btn = self._nav_btn(
+            section,
+            f"{arrow}  {cat['label']}",
+            lambda c=cat: self._toggle_category(c),
+            dim=True,
+        )
+
+        items_frame = tk.Frame(section, bg=_S_BG)
+        if cat["expanded"]:
+            items_frame.pack(fill="x")
+
+        for title in cat["items"]:
+            item = self._item_pool.get(title)
+            if item is not None:
+                self._add_item_btn(items_frame, item)
+
+        # Store live UI refs in the cat dict for toggle and in-place rename
+        cat["_toggle_btn"]  = toggle_btn
+        cat["_items_frame"] = items_frame
+
+        tk.Frame(self._sb_body, bg=_S_SEP, height=1).pack(fill="x")
+
+    def _add_toplevel_btn(self, parent: tk.Frame, item: object) -> tk.Button:
+        desc = getattr(item, "description", "")
+        btn = self._nav_btn(
+            parent,
+            f"·  {item.title}",  # type: ignore[attr-defined]
+            lambda i=item: self._select_item(i),
+            tooltip=desc,
+        )
+        self._item_btns[item.title] = btn  # type: ignore[attr-defined]
+        return btn
+
+    def _add_item_btn(self, parent: tk.Frame, item: object) -> tk.Button:
+        desc = getattr(item, "description", "")
         btn = tk.Button(
             parent,
-            text=label,
-            command=command,
-            bg=_S_BTN,
-            fg=fg,
-            activebackground=_S_HOV,
-            activeforeground=_S_FG_ON,
-            font=_S_FONT if not dim else _S_FONT_SM,
-            relief="flat",
-            anchor="w",
-            padx=10,
-            pady=5,
-            bd=0,
-            cursor="hand2",
-        )
-        btn.pack(fill="x")
-        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
-        btn.bind("<Leave>", lambda e, b=btn, f=fg: b.configure(
-            bg=_S_ACT if b is self._active_btn else _S_BTN,
-            fg=_S_FG_ON if b is self._active_btn else f,
-        ))
-        return btn
-
-    def _add_app_btn(self, app) -> tk.Button:
-        btn = tk.Button(
-            self._apps_frame,
-            text=f"    {app.title}",
-            command=lambda a=app: self._select_app(a),
-            bg=_S_BTN,
-            fg=_S_FG,
-            activebackground=_S_HOV,
-            activeforeground=_S_FG_ON,
-            font=_S_FONT_SM,
-            relief="flat",
-            anchor="w",
-            padx=10,
-            pady=4,
-            bd=0,
-            cursor="hand2",
-        )
-        btn.pack(fill="x")
-        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
-        btn.bind("<Leave>", lambda e, b=btn: b.configure(
-            bg=_S_ACT if b is self._active_btn else _S_BTN,
-            fg=_S_FG_ON if b is self._active_btn else _S_FG,
-        ))
-        self._app_btns.append((btn, app))
-        return btn
-
-    def _add_game_btn(self, game: KleinGame) -> tk.Button:
-        btn = tk.Button(
-            self._games_frame,
-            text=f"    {game.title}",
-            command=lambda g=game: self._select_game(g),
+            text=f"    {item.title}",  # type: ignore[attr-defined]
+            command=lambda i=item: self._select_item(i),
             bg=_S_BTN, fg=_S_FG,
             activebackground=_S_HOV, activeforeground=_S_FG_ON,
             font=_S_FONT_SM, relief="flat", anchor="w",
@@ -257,13 +349,58 @@ class KleinPC:
             bg=_S_ACT if b is self._active_btn else _S_BTN,
             fg=_S_FG_ON if b is self._active_btn else _S_FG,
         ))
-        self._game_btns.append((btn, game))
+        if desc:
+            _Tooltip(btn, desc)
+        self._item_btns[item.title] = btn  # type: ignore[attr-defined]
         return btn
 
-    def _set_active(self, btn: Optional[tk.Button]) -> None:
+    def _nav_btn(
+        self,
+        parent: tk.Widget,
+        label: str,
+        command: Callable,
+        dim: bool = False,
+        tooltip: str = "",
+    ) -> tk.Button:
+        fg = _S_FG_DIM if dim else _S_FG
+        btn = tk.Button(
+            parent,
+            text=label,
+            command=command,
+            bg=_S_BTN, fg=fg,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            font=_S_FONT if not dim else _S_FONT_SM,
+            relief="flat", anchor="w",
+            padx=10, pady=5, bd=0, cursor="hand2",
+        )
+        btn.pack(fill="x")
+        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
+        btn.bind("<Leave>", lambda e, b=btn, f=fg: b.configure(
+            bg=_S_ACT if b is self._active_btn else _S_BTN,
+            fg=_S_FG_ON if b is self._active_btn else f,
+        ))
+        if tooltip:
+            _Tooltip(btn, tooltip)
+        return btn
+
+    def _toggle_category(self, cat: dict) -> None:
+        cat["expanded"] = not cat["expanded"]
+        if cat["expanded"]:
+            cat["_items_frame"].pack(fill="x", after=cat["_toggle_btn"])
+            cat["_toggle_btn"].configure(text=f"▼  {cat['label']}")
+        else:
+            cat["_items_frame"].pack_forget()
+            cat["_toggle_btn"].configure(text=f"▶  {cat['label']}")
+        self._save_layout()
+
+    def _set_active(self, btn: Optional[tk.Button], title: Optional[str] = None) -> None:
         if self._active_btn:
-            self._active_btn.configure(bg=_S_BTN, fg=_S_FG)
+            try:
+                self._active_btn.configure(bg=_S_BTN, fg=_S_FG)
+            except tk.TclError:
+                pass
         self._active_btn = btn
+        self._active_title = title
         if btn:
             btn.configure(bg=_S_ACT, fg=_S_FG_ON)
 
@@ -280,7 +417,6 @@ class KleinPC:
             w.destroy()
         widget = factory()
         widget.pack(fill="both", expand=True)
-        # Give keyboard focus to the first Entry or Text inside the new content
         self._window.after(50, lambda: self._focus_first_input(widget))
 
     @staticmethod
@@ -292,97 +428,65 @@ class KleinPC:
             KleinPC._focus_first_input(w)
 
     # ──────────────────────────────────────────────────────────────────
-    # Navigation actions
+    # Navigation
     # ──────────────────────────────────────────────────────────────────
 
     def _select_terminal(self) -> None:
         self._set_active(self._btn_terminal)
         self._swap(lambda: TerminalPane(self._content, executor=self._executor))
 
-    def _select_app(self, app) -> None:
-        for btn, a in self._app_btns:
-            if a is app:
-                self._set_active(btn)
-                break
-        if isinstance(app, KleinChat):
-            self._swap(lambda a=app: a.create(self._content, on_exit=self._select_terminal))
+    def _select_item(self, item: object) -> None:
+        btn = self._item_btns.get(item.title)  # type: ignore[attr-defined]
+        self._set_active(btn, item.title)  # type: ignore[attr-defined]
+        if hasattr(item, "create"):
+            self._swap(lambda i=item: i.create(self._content, on_exit=self._select_terminal))
         else:
-            self._swap(lambda a=app: AppPane(self._content, app=a))
-
-    def _select_game(self, game) -> None:
-        for btn, g in self._game_btns:
-            if g is game:
-                self._set_active(btn)
-                break
-        self._swap(lambda g=game: g.create(self._content, on_exit=self._select_terminal))
-
-    def _add_chat_btn(self, chat: KleinChat) -> tk.Button:
-        btn = tk.Button(
-            self._chats_frame,
-            text=f"    {chat.title}",
-            command=lambda c=chat: self._select_chat(c),
-            bg=_S_BTN, fg=_S_FG,
-            activebackground=_S_HOV, activeforeground=_S_FG_ON,
-            font=_S_FONT_SM, relief="flat", anchor="w",
-            padx=10, pady=4, bd=0, cursor="hand2",
-        )
-        btn.pack(fill="x")
-        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=_S_HOV, fg=_S_FG_ON))
-        btn.bind("<Leave>", lambda e, b=btn: b.configure(
-            bg=_S_ACT if b is self._active_btn else _S_BTN,
-            fg=_S_FG_ON if b is self._active_btn else _S_FG,
-        ))
-        self._chat_btns.append((btn, chat))
-        return btn
-
-    def _select_chat(self, chat: KleinChat) -> None:
-        for btn, c in self._chat_btns:
-            if c is chat:
-                self._set_active(btn)
-                break
-        self._swap(lambda c=chat: c.create(self._content, on_exit=self._select_terminal))
-
-    def _toggle_chats(self) -> None:
-        if self._chats_expanded:
-            self._chats_frame.pack_forget()
-            self._chats_toggle_btn.configure(text="▶  Chat")
-        else:
-            self._chats_frame.pack(fill="x", after=self._chats_toggle_btn)
-            self._chats_toggle_btn.configure(text="▼  Chat")
-        self._chats_expanded = not self._chats_expanded
-
-    def _toggle_games(self) -> None:
-        if self._games_expanded:
-            self._games_frame.pack_forget()
-            self._games_toggle_btn.configure(text="▶  Games")
-        else:
-            self._games_frame.pack(fill="x", after=self._games_toggle_btn)
-            self._games_toggle_btn.configure(text="▼  Games")
-        self._games_expanded = not self._games_expanded
+            self._swap(lambda i=item: AppPane(self._content, app=i, on_exit=self._select_terminal))
 
     def _select_settings(self) -> None:
+        from kleinos.settings_pane import SettingsPane
         self._set_active(self._btn_settings)
+        self._swap(lambda: SettingsPane(
+            self._content,
+            on_exit=self._select_terminal,
+            get_layout=lambda: self._layout,
+            add_category=self._add_category,
+            delete_category=self._delete_category,
+            rename_category=self._rename_category,
+        ))
 
-        class _SettingsApp(KleinApp):
-            title = "Settings"
-            def commands(self_):
-                return [
-                    ("Display", lambda: "Resolution: 760×480\nBezel: green phosphor\nScanlines: on"),
-                    ("Sound",   lambda: "Volume: 80%\nMusic: on\nEffects: on"),
-                    ("About",   lambda: "KleinOS v1.0\nBuilt with Python + Tkinter.\nPart of KleinBOTTLE."),
-                ]
+    # ──────────────────────────────────────────────────────────────────
+    # Layout management (called from SettingsPane)
+    # ──────────────────────────────────────────────────────────────────
 
-        self._swap(lambda: AppPane(self._content, app=_SettingsApp()))
+    def _add_category(self, name: str) -> None:
+        import uuid
+        cat_id = f"cat-{uuid.uuid4().hex[:8]}"
+        self._layout["categories"].append({
+            "id": cat_id, "label": name, "expanded": True, "items": [],
+        })
+        self._save_layout()
+        self._populate_categories()
 
-    def _toggle_apps(self) -> None:
-        if self._apps_expanded:
-            self._apps_frame.pack_forget()
-            self._apps_toggle_btn.configure(text="▶  Apps")
-        else:
-            # pack after the toggle button so order is always toggle → items
-            self._apps_frame.pack(fill="x", after=self._apps_toggle_btn)
-            self._apps_toggle_btn.configure(text="▼  Apps")
-        self._apps_expanded = not self._apps_expanded
+    def _delete_category(self, cat_id: str) -> None:
+        cats = self._layout["categories"]
+        for cat in cats:
+            if cat["id"] == cat_id:
+                self._layout.setdefault("top_level_items", []).extend(cat["items"])
+                break
+        self._layout["categories"] = [c for c in cats if c["id"] != cat_id]
+        self._save_layout()
+        self._populate_categories()
+
+    def _rename_category(self, cat_id: str, new_name: str) -> None:
+        for cat in self._layout["categories"]:
+            if cat["id"] == cat_id:
+                cat["label"] = new_name
+                if "_toggle_btn" in cat:
+                    arrow = "▼" if cat["expanded"] else "▶"
+                    cat["_toggle_btn"].configure(text=f"{arrow}  {new_name}")
+                break
+        self._save_layout()
 
     # ──────────────────────────────────────────────────────────────────
     # Public API
@@ -396,13 +500,12 @@ class KleinPC:
         self._window.withdraw()
 
     def add_app(self, app: KleinApp) -> None:
-        """Register a new app into the Apps section at runtime."""
+        """Register a new app as a top-level sidebar item."""
         self._apps.append(app)
-        self._add_app_btn(app)
-        if not self._apps_expanded:
-            self._apps_frame.pack(fill="x")
-            self._apps_toggle_btn.configure(text="▼  Apps")
-            self._apps_expanded = True
+        self._item_pool[app.title] = app
+        self._layout.setdefault("top_level_items", []).append(app.title)
+        self._save_layout()
+        self._populate_categories()
 
     def set_executor(self, executor: Callable[[str], str]) -> None:
         self._executor = executor

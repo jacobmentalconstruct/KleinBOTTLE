@@ -290,6 +290,7 @@ class OllamaChatPane(tk.Frame):
 
 class OllamaChat(KleinChat):
     title = "KleinCHAT"
+    description = "Chat with a local Ollama LLM running on your machine."
 
     def create(self, parent: tk.Widget, on_exit: Callable) -> tk.Widget:
         return OllamaChatPane(parent, on_exit=on_exit)

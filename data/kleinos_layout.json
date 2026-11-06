@@ -1,0 +1,24 @@
+{
+  "top_level_items": [],
+  "categories": [
+    {
+      "id": "cat-apps",
+      "label": "Apps",
+      "expanded": true,
+      "items": [
+        "World Builder",
+        "KleinCHAT",
+        "Notes"
+      ]
+    },
+    {
+      "id": "cat-games",
+      "label": "Games",
+      "expanded": true,
+      "items": [
+        "KleinBOTTLE",
+        "Space Invaders"
+      ]
+    }
+  ]
+}

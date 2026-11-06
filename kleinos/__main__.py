@@ -25,6 +25,7 @@ from kleinos.kb_surfaces import WorldBuilder, TextAdventure
 
 class NotesApp(KleinApp):
     title = "Notes"
+    description = "In-game notepad — jot hints, clues, and reminders."
 
     def __init__(self):
         self._notes: list[str] = []
