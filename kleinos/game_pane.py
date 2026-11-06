@@ -31,7 +31,6 @@ _HUD  = "#00aa22"   # score / lives
 _S = 3   # 1 sprite-pixel = _S canvas pixels
 
 # ── Sprite definitions (1=filled, 0=empty, row-major) ────────────────
-# 8×6 invader, two variants (animate by alternating)
 _INV_A = [
     [0,0,1,0,0,0,1,0],
     [0,0,0,1,1,1,0,0],
@@ -49,7 +48,6 @@ _INV_B = [
     [0,0,1,0,0,1,0,0],
 ]
 
-# 8×6 player ship
 _PLAYER = [
     [0,0,0,1,1,0,0,0],
     [0,0,1,1,1,1,0,0],
@@ -59,8 +57,8 @@ _PLAYER = [
     [1,1,1,1,1,1,1,1],
 ]
 
-_SPR_W = 8 * _S    # sprite pixel width  = 24
-_SPR_H = 6 * _S    # sprite pixel height = 18
+_SPR_W = 8 * _S    # 24 px
+_SPR_H = 6 * _S    # 18 px
 
 
 def _draw_sprite(canvas: tk.Canvas, pattern, cx: int, cy: int, color: str) -> None:
@@ -81,14 +79,13 @@ def _draw_sprite(canvas: tk.Canvas, pattern, cx: int, cy: int, color: str) -> No
 # =====================================================================
 
 class SpaceInvadersPane(tk.Canvas):
-    # Content area dimensions (matches widescreen rect minus sidebar)
     W: int = 539
     H: int = 408
 
     COLS: int = 10
     ROWS: int = 4
-    H_GAP: int = 44    # horizontal cell size
-    V_GAP: int = 36    # vertical cell size
+    H_GAP: int = 44
+    V_GAP: int = 36
 
     def __init__(self, parent: tk.Widget, *, on_exit: Optional[Callable] = None):
         super().__init__(
@@ -103,6 +100,7 @@ class SpaceInvadersPane(tk.Canvas):
         self.bind("<KeyPress>",   lambda e: self._keys.add(e.keysym))
         self.bind("<KeyRelease>", lambda e: self._keys.discard(e.keysym))
         self.bind("<Escape>",     lambda e: self._on_escape())
+        self.bind("<Button-1>",   self._on_click)
         self._tick_id: Optional[str] = None
         self._loop()
 
@@ -117,7 +115,6 @@ class SpaceInvadersPane(tk.Canvas):
 
         self._base_speed = base_speed
         self._bomb_chance = bomb_chance
-        # bullet speed scales inversely with difficulty: harder = faster bullets
         self._bullet_speed = max(11, 40 - base_speed)
 
         self._invaders: list[list] = [
@@ -137,24 +134,53 @@ class SpaceInvadersPane(tk.Canvas):
         self._invincible = 0
         self._new_high_score = False
         self._keys: set[str] = set()
-        self._state = "start"    # start | play | quit_confirm | dead | won
+        self._state = "title"   # title | start | play | quit_confirm | dead | won
 
     # ── Main loop ────────────────────────────────────────────────────
 
     def _loop(self) -> None:
         self._update()
         self._draw()
-        self._tick_id = self.after(40, self._loop)   # ~25 fps
+        self._tick_id = self.after(40, self._loop)
 
     def _on_escape(self) -> None:
-        if self._state == "start":
+        if self._state == "title":
             self._quit()
+        elif self._state == "start":
+            self._state = "title"
         elif self._state == "play":
             self._state = "quit_confirm"
         elif self._state == "quit_confirm":
-            self._state = "play"           # ESC again = No, resume
+            self._state = "play"
         elif self._state in ("dead", "won"):
             self._quit()
+
+    def _on_click(self, event: tk.Event) -> None:
+        x, y = event.x, event.y
+        cx, cy = self.W // 2, self.H // 2
+
+        if self._state == "title":
+            self._state = "start"
+
+        elif self._state == "start":
+            # Difficulty rows: y = cy - 10 + i*26 for i = 0 (EASY), 1 (MEDIUM), 2 (HARD)
+            for i, (speed, chance) in enumerate([(25, 0.10), (18, 0.18), (11, 0.28)]):
+                row_y = cy - 10 + i * 26
+                if abs(x - cx) < 130 and abs(y - row_y) < 16:
+                    self._reset(base_speed=speed, bomb_chance=chance)
+                    self._state = "play"
+                    return
+
+        elif self._state == "quit_confirm":
+            if abs(y - (cy + 16)) < 16:
+                if x < cx:
+                    self._reset()          # Yes → title
+                else:
+                    self._state = "play"   # No → resume
+
+        elif self._state in ("dead", "won"):
+            if abs(y - (cy + 36)) < 16:
+                self._reset()              # Play again → title
 
     def _quit(self) -> None:
         if self._tick_id:
@@ -188,6 +214,13 @@ class SpaceInvadersPane(tk.Canvas):
     def _update(self) -> None:
         self._frame += 1
 
+        # Title — any key except Escape advances to difficulty select
+        if self._state == "title":
+            if self._keys - {"Escape"}:
+                self._keys.clear()
+                self._state = "start"
+            return
+
         # Difficulty select
         if self._state == "start":
             if "1" in self._keys:
@@ -204,40 +237,58 @@ class SpaceInvadersPane(tk.Canvas):
                 self._state = "play"
             return
 
-        # Quit confirmation popup
+        # Quit confirmation
         if self._state == "quit_confirm":
             if "y" in self._keys or "Y" in self._keys:
                 self._keys.discard("y")
-                self._reset()           # back to start/difficulty screen
+                self._reset()           # → title
             elif "n" in self._keys or "N" in self._keys:
                 self._keys.discard("n")
                 self._state = "play"
             return
 
-        # Restart after game over / win
+        # Post-game — R returns to title
         if self._state in ("dead", "won"):
             if "r" in self._keys:
                 self._keys.discard("r")
-                self._reset()
-                self._state = "start"
+                self._reset()           # → title
             return
 
         if self._invincible > 0:
             self._invincible -= 1
 
-        # Player movement  (WASD mirrors arrow keys)
+        # Player movement
         if "Left" in self._keys or "a" in self._keys:
             self._px = max(16, self._px - 5)
         if "Right" in self._keys or "d" in self._keys:
             self._px = min(self.W - 16, self._px + 5)
 
-        # Fire
+        # Fire — bullet spawns at the ship's nose
         if self._fire_cd > 0:
             self._fire_cd -= 1
         if "space" in self._keys and self._fire_cd == 0:
-            self._bullets.append([float(self._px), float(self._py - 20)])
+            self._bullets.append([float(self._px), float(self._py - _SPR_H // 2)])
             self._fire_cd = 15
             audio.shoot()
+
+        # Bullet ↔ invader collision — checked BEFORE bullets move so point-blank
+        # hits register even when invaders descend to the ship's gun line
+        for bullet in self._bullets[:]:
+            bx, by = bullet
+            for inv in self._invaders:
+                if not inv[2]:
+                    continue
+                ix = self._gx + inv[0] * self.H_GAP + self.H_GAP // 2
+                iy = self._gy + inv[1] * self.V_GAP + self.V_GAP // 2
+                # Vertical hitbox is _SPR_H//2 + 2 to absorb fast-bullet frame skips
+                if abs(bx - ix) < _SPR_W // 2 and abs(by - iy) < _SPR_H // 2 + 2:
+                    inv[2] = False
+                    if bullet in self._bullets:
+                        self._bullets.remove(bullet)
+                    self._score += 10
+                    self._explosions.append([ix, iy, 8])
+                    audio.hit()
+                    break
 
         # Move player bullets
         self._bullets = [[x, y - self._bullet_speed] for x, y in self._bullets if y > 0]
@@ -279,23 +330,6 @@ class SpaceInvadersPane(tk.Canvas):
                 by = self._gy + shooter[1] * self.V_GAP + _SPR_H
                 self._bombs.append([float(bx), float(by)])
 
-        # Bullet ↔ invader collision
-        for bullet in self._bullets[:]:
-            bx, by = bullet
-            for inv in self._invaders:
-                if not inv[2]:
-                    continue
-                ix = self._gx + inv[0] * self.H_GAP + self.H_GAP // 2
-                iy = self._gy + inv[1] * self.V_GAP + self.V_GAP // 2
-                if abs(bx - ix) < _SPR_W // 2 and abs(by - iy) < _SPR_H // 2:
-                    inv[2] = False
-                    if bullet in self._bullets:
-                        self._bullets.remove(bullet)
-                    self._score += 10
-                    self._explosions.append([ix, iy, 8])
-                    audio.hit()
-                    break
-
         # Bomb ↔ player collision
         for bomb in self._bombs[:]:
             bx, by = bomb
@@ -313,21 +347,23 @@ class SpaceInvadersPane(tk.Canvas):
                     self._invincible = 60
                     audio.player_hit()
 
-        # Invaders reach the player
+        # Game over when invader bottom reaches the player's gun line
         for inv in self._invaders:
             if inv[2]:
                 iy = self._gy + inv[1] * self.V_GAP + _SPR_H
-                if iy >= self._py - 10:
+                if iy >= self._py - _SPR_H // 2:
                     self._state = "dead"
 
     # ── Draw ─────────────────────────────────────────────────────────
 
     def _draw(self) -> None:
         self.delete("all")
-
-        # Scanline texture (subtle)
         for y in range(0, self.H, 4):
             self.create_line(0, y, self.W, y, fill="#020e02")
+
+        if self._state == "title":
+            self._title_screen()
+            return
 
         # HUD
         self.create_text(8, 8, anchor="nw",
@@ -340,7 +376,6 @@ class SpaceInvadersPane(tk.Canvas):
         self.create_line(0, 24, self.W, 24, fill=_GD)
         self.create_line(0, self.H - 22, self.W, self.H - 22, fill=_GD)
 
-        # Controls
         self.create_text(self.W // 2, self.H - 11, anchor="center",
                          text="[←/A][→/D] MOVE    [SPACE] FIRE    [ESC] EXIT",
                          fill=_GD, font=("Consolas", 8))
@@ -354,12 +389,12 @@ class SpaceInvadersPane(tk.Canvas):
             iy = self._gy + inv[1] * self.V_GAP + self.V_GAP // 2
             _draw_sprite(self, anim, ix, iy, _G)
 
-        # Player bullets
+        # Bullets
         for bx, by in self._bullets:
             self.create_rectangle(bx - 1, by - 6, bx + 1, by + 6,
                                   fill=_GH, outline="")
 
-        # Invader bombs
+        # Bombs
         for bx, by in self._bombs:
             self.create_rectangle(bx - 1, by - 5, bx + 1, by + 5,
                                   fill=_GD, outline="")
@@ -370,25 +405,23 @@ class SpaceInvadersPane(tk.Canvas):
 
         # Explosions
         for ex, ey, t in self._explosions:
-            r = (_S * 4) - t * 1
+            r = (_S * 4) - t
             color = _GH if t > 5 else _G
             for _ in range(6):
-                a = random.uniform(0, 6.28)
-                d = random.uniform(0, r)
-                px = ex + d * (0.5 - random.random()) * 2
-                py = ey + d * (0.5 - random.random()) * 2
+                px = ex + r * (0.5 - random.random()) * 2
+                py = ey + r * (0.5 - random.random()) * 2
                 self.create_rectangle(px - 2, py - 2, px + 2, py + 2,
                                       fill=color, outline="")
 
-        # Invincibility blink — flash player outline
+        # Invincibility blink
         if self._invincible > 0 and (self._frame // 3) % 2 == 0:
             cx, cy = int(self._px), int(self._py)
             self.create_rectangle(cx - 14, cy - 14, cx + 14, cy + 14,
                                   outline=_GH, fill="", width=1)
 
-        # Overlays
+        # State overlays
         if self._state == "start":
-            self._start_screen()
+            self._difficulty_screen()
         elif self._state == "quit_confirm":
             self._quit_confirm_overlay()
         elif self._state == "dead":
@@ -396,25 +429,45 @@ class SpaceInvadersPane(tk.Canvas):
         elif self._state == "won":
             self._overlay("  YOU WIN  ", f"SCORE  {self._score:05d}", _GH)
 
-    def _start_screen(self) -> None:
+    # ── Screens ──────────────────────────────────────────────────────
+
+    def _title_screen(self) -> None:
         cx, cy = self.W // 2, self.H // 2
-        self.create_rectangle(cx - 150, cy - 90, cx + 150, cy + 90,
+
+        self.create_text(cx, cy - 90, text="SPACE",
+                         fill=_GH, font=("Consolas", 24, "bold"))
+        self.create_text(cx, cy - 58, text="INVADERS",
+                         fill=_GH, font=("Consolas", 24, "bold"))
+
+        # Marching demo invaders
+        anim = _INV_A if (self._frame // 8) % 2 == 0 else _INV_B
+        for i in range(8):
+            _draw_sprite(self, anim, cx - 154 + i * 44, cy - 20, _GD)
+
+        self.create_line(cx - 160, cy - 2, cx + 160, cy - 2, fill=_GD)
+
+        hs = f"HI  {self._high_score:05d}" if self._high_score else "HI  -----"
+        self.create_text(cx, cy + 18, text=hs, fill=_G, font=("Consolas", 11))
+
+        if (self._frame // 15) % 2 == 0:
+            self.create_text(cx, cy + 46, text="PRESS ANY KEY TO PLAY",
+                             fill=_GH, font=("Consolas", 11, "bold"))
+
+        self.create_text(cx, cy + 80, text="[ESC] EXIT",
+                         fill=_GD, font=("Consolas", 8))
+
+    def _difficulty_screen(self) -> None:
+        cx, cy = self.W // 2, self.H // 2
+        self.create_rectangle(cx - 150, cy - 80, cx + 150, cy + 70,
                               fill="#010a01", outline=_G, width=2)
-        self.create_text(cx, cy - 65, text="SPACE INVADERS",
-                         fill=_GH, font=("Consolas", 15, "bold"))
-        hs_label = f"HI  {self._high_score:05d}" if self._high_score else "HI  -----"
-        self.create_text(cx, cy - 44, text=hs_label,
-                         fill=_GD, font=("Consolas", 9))
-        self.create_line(cx - 120, cy - 30, cx + 120, cy - 30, fill=_GD)
-        for i, (label, key) in enumerate([
-            ("EASY",   "[1]"),
-            ("MEDIUM", "[2]"),
-            ("HARD",   "[3]"),
-        ]):
+        self.create_text(cx, cy - 58, text="SELECT DIFFICULTY",
+                         fill=_GH, font=("Consolas", 13, "bold"))
+        self.create_line(cx - 120, cy - 38, cx + 120, cy - 38, fill=_GD)
+        for i, (label, key) in enumerate([("EASY", "[1]"), ("MEDIUM", "[2]"), ("HARD", "[3]")]):
             y = cy - 10 + i * 26
             self.create_text(cx - 30, y, text=key,   fill=_G,  font=("Consolas", 11, "bold"), anchor="e")
-            self.create_text(cx - 20, y, text=label,  fill=_GH, font=("Consolas", 11), anchor="w")
-        self.create_text(cx, cy + 70, text="[ESC] EXIT",
+            self.create_text(cx - 20, y, text=label, fill=_GH, font=("Consolas", 11), anchor="w")
+        self.create_text(cx, cy + 56, text="[ESC] BACK",
                          fill=_GD, font=("Consolas", 8))
 
     def _quit_confirm_overlay(self) -> None:
@@ -423,10 +476,10 @@ class SpaceInvadersPane(tk.Canvas):
                               fill="#010a01", outline=_G, width=2)
         self.create_text(cx, cy - 20, text="Are you really a quitter?",
                          fill=_GH, font=("Consolas", 12, "bold"))
-        self.create_text(cx - 30, cy + 16, text="[Y]",  fill=_G,  font=("Consolas", 11, "bold"), anchor="e")
-        self.create_text(cx - 20, cy + 16, text="Yes",  fill=_GH, font=("Consolas", 11), anchor="w")
-        self.create_text(cx + 30, cy + 16, text="[N]",  fill=_G,  font=("Consolas", 11, "bold"), anchor="e")
-        self.create_text(cx + 40, cy + 16, text="No",   fill=_GH, font=("Consolas", 11), anchor="w")
+        self.create_text(cx - 30, cy + 16, text="[Y]", fill=_G,  font=("Consolas", 11, "bold"), anchor="e")
+        self.create_text(cx - 20, cy + 16, text="Yes", fill=_GH, font=("Consolas", 11), anchor="w")
+        self.create_text(cx + 30, cy + 16, text="[N]", fill=_G,  font=("Consolas", 11, "bold"), anchor="e")
+        self.create_text(cx + 40, cy + 16, text="No",  fill=_GH, font=("Consolas", 11), anchor="w")
 
     def _overlay(self, title: str, sub: str, color: str) -> None:
         cx, cy = self.W // 2, self.H // 2
@@ -440,9 +493,8 @@ class SpaceInvadersPane(tk.Canvas):
             self.create_text(cx, cy + 16, text="** NEW HIGH SCORE **",
                              fill=_GH, font=("Consolas", 9, "bold"))
         else:
-            hs_label = f"HI  {self._high_score:05d}" if self._high_score else ""
-            if hs_label:
-                self.create_text(cx, cy + 16, text=hs_label,
+            if self._high_score:
+                self.create_text(cx, cy + 16, text=f"HI  {self._high_score:05d}",
                                  fill=_GD, font=("Consolas", 9))
         self.create_text(cx, cy + 36, text="[R] PLAY AGAIN",
                          fill=_G, font=("Consolas", 9))
