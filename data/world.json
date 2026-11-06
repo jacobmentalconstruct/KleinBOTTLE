@@ -188,7 +188,7 @@
       "id": "office",
       "name": "Office",
       "area": "KleinBOTTLE House",
-      "description": "You are sitting at the desk. The monitor glows a steady green in the quiet room. Behind it, a window looks out onto the yard. To your left, a floating shelf — the cat is asleep on it, one paw hanging over the edge. To your right, a bookshelf. The rest of the house waits beyond the door.",
+      "description": "You are sitting at the desk. The monitor glows a steady green in the quiet room. Behind it, a window looks out onto the yard. To your left, a floating shelf \u00e2\u20ac\u201d the cat is asleep on it, one paw hanging over the edge. To your right, a bookshelf. The rest of the house waits beyond the door.",
       "exits": {
         "west": "hall"
       },
@@ -222,6 +222,12 @@
           "name": "Bookshelf",
           "kind": "furniture",
           "description": "A tall bookshelf to the right of the desk, packed with technical manuals, notebooks, and a few worn novels."
+        },
+        {
+          "id": "cat",
+          "name": "Cat",
+          "kind": "cat",
+          "description": "A large tabby cat occupies the floating shelf like it was built for exactly that purpose. One eye is half-open. It is judging you."
         }
       ],
       "actors": [
@@ -303,7 +309,7 @@
       "id": "front_woods",
       "name": "Wooded Path",
       "area": "Outside",
-      "description": "A narrow path winds between tall trees. Roots cross the ground, light filters green through the canopy. The path loops around the property — you can hear the back of the house through the trees ahead.",
+      "description": "A narrow path winds between tall trees. Roots cross the ground, light filters green through the canopy. The path loops around the property \u00e2\u20ac\u201d you can hear the back of the house through the trees ahead.",
       "exits": {
         "back": "front_yard",
         "forward": "back_woods"

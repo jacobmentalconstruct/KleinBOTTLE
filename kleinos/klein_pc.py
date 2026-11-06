@@ -578,6 +578,19 @@ class KleinPC:
     # ──────────────────────────────────────────────────────────────────
 
     def show(self) -> None:
+        # On first show, position window offset from root so it doesn't stack on top
+        if self._window.winfo_x() == 0 and self._window.winfo_y() == 0:
+            root = self._window.master
+            try:
+                rx = root.winfo_x()
+                ry = root.winfo_y()
+                rw = root.winfo_width()
+                # Open to the right of the main window; fall back to a fixed offset
+                x = rx + rw + 20
+                y = ry + 40
+                self._window.geometry(f"+{x}+{y}")
+            except Exception:
+                self._window.geometry("+80+80")
         self._window.deiconify()
         self._window.lift()
 

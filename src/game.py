@@ -5,11 +5,26 @@ only this in-memory play session, never the builder's source JSON.
 """
 from __future__ import annotations
 
+import random
 from copy import deepcopy
 from dataclasses import dataclass
 
 from .world_store import WorldStore
 from .ollama_phone import DEFAULT_MODEL
+
+# ── Cat reaction table (50/50 purr vs meow, one picked at random per bucket) ──
+_CAT_PURRS = [
+    "The cat purrs like a small engine.",
+    "A deep rumble fills the shelf. Prrrrrrr.",
+    "The cat's eyes close to satisfied slits. Purrr.",
+    "Vibrations. Pure, contented vibrations.",
+]
+_CAT_MEOWS = [
+    "Mrrrow.",
+    "The cat meows once, sharply, then looks away.",
+    "A short, indignant meow. It had a point.",
+    "The cat opens its mouth. A tiny, offended sound emerges.",
+]
 
 DEFAULT_PHONE_PROMPT = (
     "You are a mysterious voice reached by telephone in a text adventure. "
@@ -283,6 +298,19 @@ class GameSession:
         self._computer_request = obj
         return f"You switch on {_name(obj)}. The KleinOS desktop appears."
 
+    def _pet(self, query: str) -> str:
+        """Pet an animal in the room (currently: cat)."""
+        room = self._room()
+        if room is None:
+            return self.look()
+        cats = [obj for obj in room.get("objects", [])
+                if not obj.get("hidden", False) and
+                str(obj.get("kind", "")).casefold() == "cat"]
+        if not cats:
+            return "There's nothing here worth petting."
+        bucket = _CAT_PURRS if random.random() < 0.5 else _CAT_MEOWS
+        return random.choice(bucket)
+
     def consume_computer_request(self) -> dict | None:
         """Return one pending UI action, at most once."""
         obj = self._computer_request
@@ -305,6 +333,8 @@ class GameSession:
             return self.answer_phone(arg)
         if verb == "use":
             return self.use_computer(arg) if arg else "Use what?"
+        if verb == "pet":
+            return self._pet(arg)
         if command.casefold() in {"pick up phone", "pick up telephone", "pick up receiver"}:
             return self.answer_phone()
         if verb in {"help", "?"}:

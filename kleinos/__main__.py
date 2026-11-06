@@ -171,6 +171,7 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
         _pc.append(_make_pc(root))
         _pc[0].show()
 
+    pane.set_computer_callback(open_kleinpc)
     for child in pane.winfo_children():
         if hasattr(child, "_open_computer"):
             child._open_computer = open_kleinpc  # type: ignore[attr-defined]
