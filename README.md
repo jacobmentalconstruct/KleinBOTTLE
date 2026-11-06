@@ -3,6 +3,14 @@
 > *You are sitting at a desk. The monitor glows a steady green.  
 > Interact with the computer — and a world opens inside itself.*
 
+## Screenshots
+
+![Title / Splash Screen](assets/screenshots/splash-screen.png)
+
+![Office — with the KleinBOTTLE PC](assets/screenshots/office.png)
+
+![Living Room](assets/screenshots/living-room.png)
+
 A recursive text adventure / retro desktop hybrid. The house contains a PC. The PC contains a text adventure. The text adventure contains a PC. Loop complete.
 
 ---
