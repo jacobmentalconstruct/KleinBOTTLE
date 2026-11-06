@@ -201,6 +201,13 @@ class SettingsPane(tk.Frame):
         tk.Label(parent, text="⚠  Restart required to apply",
                  bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
                  ).pack(fill="x")
+        tk.Button(
+            parent, text="Apply (restart now)",
+            command=self._show_restart_popup,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT,
+            relief="flat", padx=12, pady=4, bd=0, cursor="hand2",
+        ).pack(anchor="w", pady=(6, 0))
 
     def _select_palette(self, key: str) -> None:
         current = self._cfg.get("palette", "green")
@@ -460,6 +467,84 @@ class SettingsPane(tk.Frame):
             popup.destroy()
 
         self._popup_buttons(popup, _confirm, popup.destroy)
+
+    # ── Restart popup ────────────────────────────────────────────────
+
+    def _show_restart_popup(self) -> None:
+        palette_name = _PALETTE_LABELS.get(self._cfg.get("palette", "green"), "selected")
+        popup = tk.Toplevel(self)
+        popup.configure(bg=_BG)
+        popup.resizable(False, False)
+        popup.transient(self.winfo_toplevel())
+        popup.grab_set()
+
+        tk.Label(popup,
+                 text=f"Apply '{palette_name}'?\nKleinOS will restart now.",
+                 bg=_BG, fg=_TEXT_FG, font=_FONT, padx=16, pady=12,
+                 justify="center").pack()
+
+        btn_row = tk.Frame(popup, bg=_BG)
+        btn_row.pack(pady=(0, 12))
+
+        # 0 = Yes focused, 1 = No focused; default to Yes (user just clicked Apply)
+        sel = [0]
+
+        yes_btn = tk.Button(btn_row, text="[Y]  Yes", command=lambda: _confirm(0),
+                            bg=_BTN_ACT, fg=_TEXT_HI,
+                            activebackground=_BTN_ACT, activeforeground=_TEXT_HI,
+                            font=_FONT_B, relief="flat", padx=12, pady=4, bd=0,
+                            cursor="hand2")
+        yes_btn.pack(side="left", padx=6)
+
+        no_btn = tk.Button(btn_row, text="[N]  No", command=lambda: _confirm(1),
+                           bg=_BTN_BG, fg=_TEXT_DIM,
+                           activebackground=_BTN_ACT, activeforeground=_TEXT_HI,
+                           font=_FONT_SM, relief="flat", padx=12, pady=4, bd=0,
+                           cursor="hand2")
+        no_btn.pack(side="left", padx=6)
+
+        def _highlight() -> None:
+            if sel[0] == 0:
+                yes_btn.configure(bg=_BTN_ACT, fg=_TEXT_HI, font=_FONT_B)
+                no_btn.configure(bg=_BTN_BG,   fg=_TEXT_DIM, font=_FONT_SM)
+            else:
+                yes_btn.configure(bg=_BTN_BG,   fg=_TEXT_DIM, font=_FONT_SM)
+                no_btn.configure(bg=_BTN_ACT, fg=_TEXT_HI, font=_FONT_B)
+
+        def _confirm(choice: int) -> None:
+            popup.destroy()
+            if choice == 0:
+                self._do_restart()
+
+        def _on_key(event: tk.Event) -> None:
+            k = event.keysym
+            if k in ("y", "Y"):
+                _confirm(0)
+            elif k in ("n", "N", "Escape"):
+                _confirm(1)
+            elif k in ("Left", "a"):
+                sel[0] = 0; _highlight()
+            elif k in ("Right", "d"):
+                sel[0] = 1; _highlight()
+            elif k in ("space", "Return"):
+                _confirm(sel[0])
+
+        popup.bind("<Key>", _on_key)
+        popup.focus_set()
+
+        # Centre over parent
+        popup.update_idletasks()
+        pw = popup.winfo_reqwidth()
+        ph = popup.winfo_reqheight()
+        px = self.winfo_rootx() + (self.winfo_width()  - pw) // 2
+        py = self.winfo_rooty() + (self.winfo_height() - ph) // 2
+        popup.geometry(f"+{px}+{py}")
+
+    def _do_restart(self) -> None:
+        import subprocess
+        import sys
+        subprocess.Popen([sys.executable] + sys.argv)
+        self.winfo_toplevel().destroy()
 
     # ── Popup helpers ────────────────────────────────────────────────
 
