@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import threading
 import tkinter as tk
 from pathlib import Path
 from typing import Callable, Optional
@@ -19,6 +20,33 @@ from typing import Callable, Optional
 from kleinos.klein_app import KleinGame
 
 _SAVE_PATH = Path(__file__).resolve().parent.parent / "data" / "mahisland_save.json"
+
+# ── Audio ─────────────────────────────────────────────────────────────
+# (freq_hz, duration_ms) sequences — played async in daemon threads via winsound
+_SFX: dict[str, list[tuple[int, int]]] = {
+    "swing":    [(380, 40)],
+    "hit_mob":  [(650, 55)],
+    "hit_node": [(220, 55)],
+    "damage":   [(160, 90)],
+    "eat":      [(880, 70)],
+    "place":    [(480, 60)],
+    "mob_die":  [(720, 40)],
+    "craft":    [(660, 55), (880, 80)],
+    "death":    [(350, 90), (260, 90), (180, 130)],
+}
+
+def _sfx(name: str) -> None:
+    tones = _SFX.get(name)
+    if not tones:
+        return
+    def _play() -> None:
+        try:
+            import winsound
+            for freq, ms in tones:
+                winsound.Beep(freq, ms)
+        except Exception:
+            pass
+    threading.Thread(target=_play, daemon=True).start()
 from kleinos.palette import (
     BG as _BG,
     GM_DARK as _DARK, GM_MID as _MID, GM_BRIGHT as _BRIGHT, FG_HUD as _HUD,
@@ -524,6 +552,7 @@ class MAHisLANDPane(tk.Canvas):
             if self._hunger == 0:
                 self._hp = max(0, self._hp - 2)
                 if self._hp <= 0:
+                    _sfx("death")
                     self._state = "dead"
 
         # Hearth fuel/upkeep tick
@@ -591,6 +620,7 @@ class MAHisLANDPane(tk.Canvas):
         if self._swing_cd > 0:
             return
         self._swing_cd = SWING_CD
+        _sfx("swing")
         dmg = 25 if "gather_tool" in self._gear else SWING_DMG
 
         # Swing visual: line from player to reach point
@@ -630,11 +660,13 @@ class MAHisLANDPane(tk.Canvas):
             if diff > math.pi * 0.45:
                 continue
             mob["hp"] -= combat_dmg
+            _sfx("hit_mob")
             self._flash_msg(f"Hit {mob['kind']}  {max(0,mob['hp'])}/{mob['max_hp']}")
             return
 
         if best_node is not None:
             best_node["hp"] -= dmg
+            _sfx("hit_node")
             if best_node["hp"] <= 0:
                 res, qty = _NODE_DROP[best_node["kind"]]
                 if "gather_tool" in self._gear:
@@ -729,6 +761,7 @@ class MAHisLANDPane(tk.Canvas):
             s["claimed"] = False
         self._structs.append(s)
         self._score += SCORE_STRUCT
+        _sfx("place")
         self._flash_msg(f"Placed {kind}  +{SCORE_STRUCT}pts")
 
     def _do_craft(self, item: str) -> None:
@@ -757,6 +790,7 @@ class MAHisLANDPane(tk.Canvas):
             self._inv[res] -= qty
         self._gear.add(item)
         self._score += SCORE_CRAFT
+        _sfx("craft")
         self._flash_msg(f"Crafted {item}!  +{SCORE_CRAFT}pts")
 
     def _handle_build_click(self, cx: int, cy: int) -> None:
@@ -844,6 +878,7 @@ class MAHisLANDPane(tk.Canvas):
         self._inv["food"] -= 1
         self._hunger = min(P_HN_MAX, self._hunger + FOOD_RESTORE_HN)
         self._hp     = min(P_HP_MAX, self._hp     + FOOD_RESTORE_HP)
+        _sfx("eat")
         self._flash_msg(f"Ate food  HP:{int(self._hp)}  HN:{int(self._hunger)}")
 
     # ── Mob AI ───────────────────────────────────────────────────────
@@ -945,7 +980,9 @@ class MAHisLANDPane(tk.Canvas):
                         dmg = dmg // 2
                     self._hp = max(0, self._hp - dmg)
                     mob["dmg_cd"] = 1.0
+                    _sfx("damage")
                     if self._hp <= 0:
+                        _sfx("death")
                         self._state = "dead"
                 else:
                     mob["dmg_cd"] -= dt
@@ -991,6 +1028,7 @@ class MAHisLANDPane(tk.Canvas):
                 mob["vy"] = math.sin(angle) * MOB_WANDER_SPD
 
     def _drop_mob(self, mob: dict) -> None:
+        _sfx("mob_die")
         if mob["kind"] == "critter":
             self._inv["food"]    = self._inv.get("food",    0) + 2
             self._inv["leather"] = self._inv.get("leather", 0) + 1
