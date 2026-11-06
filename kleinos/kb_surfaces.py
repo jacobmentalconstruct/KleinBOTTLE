@@ -127,6 +127,8 @@ class KleinBuilderPane(tk.Frame):
 class KleinAdventurePane(tk.Frame):
     """
     Hosts GameSurface inside a green-themed tk.Frame.
+    Left panel: RoomImagePanel (320 px, generated per room).
+    Right panel: GameSurface (fills remaining space).
     world_path defaults to KleinBOTTLE/data/world.json.
     """
 
@@ -139,14 +141,49 @@ class KleinAdventurePane(tk.Frame):
     ):
         super().__init__(parent, bg="#010a01", bd=0, highlightthickness=0)
         self._on_exit = on_exit
+        self._session = None
+        self._last_room_id: Optional[str] = None
         try:
             _apply_theme(self)
             GameSurface, GameSession, WorldStore = _import_game()
             session = GameSession(WorldStore(world_path))
-            surface = GameSurface(self, session)
-            surface.pack(fill="both", expand=True)
+            self._session = session
+
+            from kleinos.room_panel import RoomImagePanel
+
+            inner = tk.Frame(self, bg="#010a01")
+            inner.pack(fill="both", expand=True)
+
+            self._room_panel = RoomImagePanel(inner)
+            self._room_panel.pack(side="left", fill="y")
+
+            surface = GameSurface(inner, session)
+            surface.pack(side="left", fill="both", expand=True)
+
+            self._poll_room()
         except Exception as exc:
             self._error(str(exc))
+
+    def _poll_room(self) -> None:
+        try:
+            s = self._session
+            if s is not None:
+                rid = s.room_id
+                if rid != self._last_room_id:
+                    self._last_room_id = rid
+                    room = next(
+                        (r for r in s.world["rooms"] if r["id"] == rid), None
+                    )
+                    if room:
+                        self._room_panel.update_room(
+                            rid,
+                            room["name"],
+                            room["description"],
+                            room.get("area", ""),
+                        )
+        except Exception:
+            pass
+        self.after(400, self._poll_room)
 
     def _error(self, msg: str) -> None:
         tk.Label(
