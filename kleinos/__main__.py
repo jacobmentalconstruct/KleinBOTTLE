@@ -144,8 +144,14 @@ def _show_adventure(root: tk.Tk) -> None:
         w.destroy()
     pane = KleinAdventurePane(root, on_exit=lambda: _show_title(root))
     pane.pack(fill="both", expand=True)
-    # Defer patch until Tkinter has rendered the GameSurface children
-    root.after(50, lambda: _patch_pc(pane, root))
+    # Defer until GameSurface children are rendered, then patch PC and focus entry
+    def _after_render():
+        _patch_pc(pane, root)
+        for child in pane.winfo_children():
+            if hasattr(child, "entry"):
+                child.entry.focus_set()  # type: ignore[attr-defined]
+                return
+    root.after(50, _after_render)
 
 
 # ── Entry point ───────────────────────────────────────────────────────
