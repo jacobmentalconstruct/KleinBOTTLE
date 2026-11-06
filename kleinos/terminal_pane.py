@@ -44,10 +44,12 @@ class TerminalPane(tk.Frame):
         *,
         executor: Optional[Callable[[str], str]] = None,
         prompt: str = "C:\\> ",
+        header: str = "KleinOS Terminal  [type 'help' for commands]",
     ):
         super().__init__(parent, bg=_BG, bd=0, highlightthickness=0)
         self._executor = executor or self._builtin
         self._prompt = prompt
+        self._header = header
         self._busy = False
         self._build()
 
@@ -112,7 +114,8 @@ class TerminalPane(tk.Frame):
         self._history: list[str] = []
         self._hist_pos: int = -1
 
-        self._append("KleinOS Terminal  [type 'help' for commands]\n", "dim")
+        if self._header:
+            self._append(self._header + "\n", "dim")
 
     # ------------------------------------------------------------------
     # Input handling

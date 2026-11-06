@@ -1,0 +1,103 @@
+{
+  "title": "The Shack",
+  "version": "1.0",
+  "schema": "kleinos-adventure-v1",
+  "start_room": "trail_end",
+  "intro": "Rain patters on dead leaves somewhere behind you.\nYou don't remember deciding to leave the trail — only that the smell pulled you: damp wood, rot, and something else. Something older.\n\nAhead, in the grey light of a clearing, a shack stands that has no business still standing.\n\nType HELP for a list of commands.",
+  "rooms": [
+    {
+      "id": "trail_end",
+      "name": "End of Trail",
+      "description": "An overgrown path ends at the edge of a clearing. Birch trees press close on three sides. A weathered wooden shack squats in the clearing to the north, one window dark, the other missing entirely.",
+      "exits": { "north": "shack_porch" },
+      "items": []
+    },
+    {
+      "id": "shack_porch",
+      "name": "The Porch",
+      "description": "The porch boards flex and pop under your weight. Someone left a rusted crowbar leaning against the railing — left it and apparently never came back. The front door hangs open an inch, darkness beyond.",
+      "exits": { "south": "trail_end", "in": "shack_interior" },
+      "items": ["rusted_crowbar"]
+    },
+    {
+      "id": "shack_interior",
+      "name": "Shack Interior",
+      "description": "A single dusty room. Cobwebs bridge every corner. A collapsed iron stove lists against the far wall. On the mantel above it sits an old oil lantern. A rectangle of less-filthy floor near the centre reveals where a rug used to lie — and beneath where the rug was, a wooden trapdoor with a iron ring.",
+      "exits": { "out": "shack_porch", "down": "basement" },
+      "items": ["oil_lantern", "torn_map"]
+    },
+    {
+      "id": "basement",
+      "name": "The Basement",
+      "description": "Stone walls sweat with moisture. Rusted tools hang from hooks driven into the mortar. Heavy wooden shelving lines the north wall — dozens of unlabelled glass jars packed tight, the contents long since gone to sediment and film. One shelf unit sits slightly proud of the wall, as if it pivots on a hidden axis.",
+      "dark": true,
+      "exits": { "up": "shack_interior" },
+      "items": [],
+      "unlock_exit": {
+        "item": "rusted_crowbar",
+        "direction": "north",
+        "destination": "tunnel",
+        "message": "You drive the crowbar behind the shelf unit and lean your weight into it. Something clunks, and the whole structure swings outward on a hidden hinge, releasing a gust of cold, earthy air. Beyond is a low opening and a tunnel sloping down into darkness.",
+        "repeat": "The passage is already open."
+      }
+    },
+    {
+      "id": "tunnel",
+      "name": "Earthen Tunnel",
+      "description": "Hand-dug through clay and rock. Crude timber props brace the ceiling every few feet. The air smells of damp earth and something faintly chemical — solvents, long since evaporated to a ghost of a scent. The tunnel ends at a heavy wooden door to the north. Halfway along, something catches the light on the floor.",
+      "dark": true,
+      "exits": { "south": "basement", "north": "vault" },
+      "items": ["brass_key"]
+    },
+    {
+      "id": "vault",
+      "name": "The Vault",
+      "description": "A stone-lined chamber, clearly constructed with more care than anything above ground. Shelves hold dozens of unlabelled green bottles, most still sealed, stacked in careful rows. In the centre of the room sits a heavy iron chest with a padlock the size of your fist.",
+      "dark": true,
+      "exits": { "south": "tunnel" },
+      "items": ["old_ledger", "iron_chest"]
+    }
+  ],
+  "items": [
+    {
+      "id": "rusted_crowbar",
+      "name": "rusted crowbar",
+      "description": "Heavy and pitted with surface rust, but the steel underneath is sound. Good for persuading things open.",
+      "takeable": true
+    },
+    {
+      "id": "oil_lantern",
+      "name": "oil lantern",
+      "description": "A dented tin lantern. It sloshes when you shake it — there's still oil in the reservoir. The wick looks dry but serviceable.",
+      "takeable": true,
+      "use_message": "You strike the flint. The wick catches on the third try, and yellow light pools outward around you."
+    },
+    {
+      "id": "torn_map",
+      "name": "torn map",
+      "description": "Half of a hand-drawn diagram on yellowed paper. Boxes connected by dotted lines. One box is labelled 'cold store' in pencil; another, in different ink and a different hand, is labelled simply 'V'. An arrow points downward from the cold-store box. The other half of the map is missing.",
+      "takeable": true
+    },
+    {
+      "id": "brass_key",
+      "name": "brass key",
+      "description": "A heavy brass key, green with verdigris, on a loop of rotted cord. It looks like it was made for something that was meant to stay locked for a long time.",
+      "takeable": true
+    },
+    {
+      "id": "old_ledger",
+      "name": "old ledger",
+      "description": "A thick ledger, water-stained but mostly readable. Columns of dates, quantities, and initials: 1924 through 1931. The quantities are in gallons. The last entry, dated October 1931, reads: 'E. Harmon warns federal men asking questions on State Road. Closing up. All stock secured. If I don't come back, V is paid for. — R.M.'",
+      "takeable": true
+    },
+    {
+      "id": "iron_chest",
+      "name": "iron chest",
+      "description": "A solid iron chest, hand-riveted, with a heavy padlock threaded through the hasp. It isn't going anywhere.",
+      "takeable": false,
+      "key": "brass_key",
+      "open_description": "The iron chest stands open. Inside you found what R.M. left behind.",
+      "unlock_message": "The key turns with a grinding click that echoes off the stone walls. The padlock falls open.\n\nInside the chest: a wad of old banknotes in mixed denominations, bound with a rubber band that crumbles when you touch it. A small photograph of a woman in a fur-collared coat, laughing at something outside the frame. And a folded letter, the ink still crisp:\n\n  'If you found this, then R.M. is gone and the law never got here first.\n   Take what you need. Tell no one about the rest. The woman in the photo\n   knows nothing — keep it that way.\n                                            — E.H.'"
+    }
+  ]
+}
