@@ -160,12 +160,22 @@ class KleinAdventurePane(tk.Frame):
 
             from kleinos.room_panel import RoomImagePanel
 
-            # Vertical layout: title+image banner → action buttons → game surface
-            self._room_panel = RoomImagePanel(self)
-            self._room_panel.pack(fill="x")
+            surface = GameSurface(self, session)
+            surface.pack(fill="both", expand=True)
+            self._surface = surface
 
-            self._btn_row = tk.Frame(self, bg=_BTN_ROW_BG)
-            self._btn_row.pack(fill="x", padx=4, pady=(0, 2))
+            # Inject room image panel and action buttons into the left column
+            # of GameSurface's internal PanedWindow, before the transcript.
+            # This makes the image match the play-panel width and lets the
+            # navigation sidebar run full height from the top.
+            left = surface._main_col       # type: ignore[attr-defined]
+            anchor = surface._story_frame  # type: ignore[attr-defined]
+
+            self._room_panel = RoomImagePanel(left)
+            self._room_panel.pack(fill="x", before=anchor)
+
+            self._btn_row = tk.Frame(left, bg=_BTN_ROW_BG)
+            self._btn_row.pack(fill="x", padx=4, pady=(0, 2), before=anchor)
 
             self._btn_power = tk.Button(
                 self._btn_row, text="[ ⏻ Power ]",
@@ -181,13 +191,8 @@ class KleinAdventurePane(tk.Frame):
                 relief="flat", font=_BTN_FONT,
                 command=self._pet_cat,
             )
-            # Buttons are shown/hidden per room in _poll_room
             self._has_terminal = False
             self._has_cat      = False
-
-            surface = GameSurface(self, session)
-            surface.pack(fill="both", expand=True)
-            self._surface = surface
 
             self._poll_room()
         except Exception as exc:

@@ -39,7 +39,10 @@ class GameSurface(ttk.Frame):
         body.add(main, weight=4)
         body.add(sidebar, weight=1)
 
+        self._main_col = main     # exposed so KleinAdventurePane can inject above transcript
+
         story = ttk.Frame(main)
+        self._story_frame = story
         story.pack(fill="both", expand=True)
         self.transcript = tk.Text(story, wrap="word", state="disabled",
                                   padx=10, pady=10, spacing3=6)
