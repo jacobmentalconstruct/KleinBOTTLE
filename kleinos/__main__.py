@@ -24,6 +24,27 @@ from kleinos.adventure import TheShack
 from kleinos.mahisland import MAHisLAND
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
+_SPLASH_PATH = _KB_ROOT / "data" / "splash.png"
+_SPLASH_W    = 320   # target display width (matches natural image size)
+_SPLASH_H    = 240   # target display height
+
+try:
+    from PIL import Image as _PilImage, ImageTk as _PilImageTk  # type: ignore[import-untyped]
+    _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
+    def _load_splash_photo():
+        img  = _PilImage.open(_SPLASH_PATH)
+        iw, ih = img.size
+        scale = min(_SPLASH_W / iw, _SPLASH_H / ih)
+        nw, nh = int(iw * scale), int(ih * scale)
+        img   = img.resize((nw, nh), _NEAREST)
+        gray  = img.convert("L")
+        zeros = gray.point(lambda _: 0)
+        tinted = _PilImage.merge("RGB", (zeros, gray, zeros))
+        return _PilImageTk.PhotoImage(tinted), nw, nh
+    _SPLASH_PHOTO, _SPLASH_NW, _SPLASH_NH = _load_splash_photo()
+except Exception:
+    _SPLASH_PHOTO, _SPLASH_NW, _SPLASH_NH = None, 0, 0
+
 
 # ── Apps that live inside the in-game PC ─────────────────────────────
 
@@ -77,14 +98,28 @@ class TitleScreen(tk.Canvas):
         w = self.winfo_width()  or 960
         h = self.winfo_height() or 680
         cx, cy = w // 2, h // 2
-        self.create_text(cx, cy - 70,
+
+        if _SPLASH_PHOTO is not None:
+            # Image centered above title; shift text block down accordingly
+            img_top = cy - _SPLASH_NH - 80
+            self.create_image(cx - _SPLASH_NW // 2, img_top,
+                              anchor="nw", image=_SPLASH_PHOTO)
+            title_y    = cy + 10
+            tagline_y  = cy + 60
+            prompt_y   = cy + 100
+        else:
+            title_y    = cy - 70
+            tagline_y  = cy - 14
+            prompt_y   = cy + 34
+
+        self.create_text(cx, title_y,
                          text="KleinBOTTLE",
                          fill=_BRIGHT, font=("Consolas", 44, "bold"))
-        self.create_text(cx, cy - 14,
+        self.create_text(cx, tagline_y,
                          text="A house.  A computer.  A world inside itself.",
                          fill=_MID, font=("Consolas", 11))
         if self._blink_visible:
-            self.create_text(cx, cy + 34,
+            self.create_text(cx, prompt_y,
                              text="PRESS  ENTER",
                              fill=_DIM, font=("Consolas", 10))
 
