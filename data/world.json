@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "KleinBOTTLE House",
-  "start_room": "hall",
+  "start_room": "office",
   "rooms": [
     {
       "id": "hall",
@@ -188,7 +188,7 @@
       "id": "office",
       "name": "Office",
       "area": "KleinBOTTLE House",
-      "description": "A focused room. A desk sits beneath a window, the glow of a monitor casting soft light. To the left of the desk a floating shelf is wall-mounted at eye level. To the right, a tall bookshelf stands. The cat has claimed the shelf.",
+      "description": "You are sitting at the desk. The monitor glows a steady green in the quiet room. Behind it, a window looks out onto the yard. To your left, a floating shelf — the cat is asleep on it, one paw hanging over the edge. To your right, a bookshelf. The rest of the house waits beyond the door.",
       "exits": {
         "west": "hall"
       },
