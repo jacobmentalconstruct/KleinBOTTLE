@@ -357,23 +357,20 @@ class MAHisLANDPane(tk.Canvas):
         if self._build_menu_open:
             self._handle_build_click(event.x, event.y)
             return
-        # Slot 1 = FOOD — click eats
-        if self._hotbar_sel == 1:
-            self._eat_food()
-            return
-        # Slot 0 = FIST (and default) — swing / attack / harvest
-        self._do_swing()
+        if self._hotbar_sel == 1:  # HAMMER — place queued blueprint
+            if self._build_sel:
+                self._do_place(self._build_sel)
+                self._build_sel = None
+            else:
+                self._flash_msg("[R] open build menu to select a blueprint")
+        else:  # FIST — swing / attack / harvest
+            self._do_swing()
 
     def _on_rclick(self, _event: tk.Event) -> None:
         if self._build_menu_open:
             self._build_menu_open = False
             return
-        if self._build_sel:
-            # Place queued blueprint in facing tile
-            self._do_place(self._build_sel)
-            self._build_sel = None
-            return
-        # Near a structure → interact; otherwise nothing
+        # RMB = use/interact with nearest structure
         self._do_interact()
 
     # ── Update ───────────────────────────────────────────────────────
@@ -392,16 +389,21 @@ class MAHisLANDPane(tk.Canvas):
             k.discard("i")
             self._inv_open = not self._inv_open
             self._build_menu_open = False
-        if "b" in k:
-            k.discard("b")
+        if "r" in k:
+            k.discard("r")
             self._build_menu_open = not self._build_menu_open
             self._inv_open = False
 
-        # Hotbar number keys
-        for n in range(1, 10):
-            if str(n) in k:
-                k.discard(str(n))
-                self._hotbar_sel = n - 1
+        # Hotbar: 1/2 equip tool, 3 consumes food (never changes equipped slot)
+        if "1" in k:
+            k.discard("1")
+            self._hotbar_sel = 0   # FIST
+        if "2" in k:
+            k.discard("2")
+            self._hotbar_sel = 1   # HAMMER
+        if "3" in k:
+            k.discard("3")
+            self._eat_food()
 
         # Player facing
         dx = self._mx - self._px
@@ -502,8 +504,11 @@ class MAHisLANDPane(tk.Canvas):
             ty = int((wy + oy) // TILE)
             # Solid structures
             for s in self._structs:
-                if s["tx"] == tx and s["ty"] == ty and s["kind"] in ("wall", "spike", "hearth", "bench", "crate"):
-                    return False
+                if s["tx"] == tx and s["ty"] == ty:
+                    if s["kind"] in ("wall", "spike", "hearth", "bench", "crate"):
+                        return False
+                    if s["kind"] == "gate" and not s.get("open", False):
+                        return False
             # Alive resource nodes
             for node in self._nodes:
                 if node["hp"] > 0 and node["tx"] == tx and node["ty"] == ty:
@@ -578,11 +583,15 @@ class MAHisLANDPane(tk.Canvas):
                 self._flash_msg(f"{best_node['kind']}  {best_node['hp']}/{best_node['max_hp']}")
 
     def _do_interact(self) -> None:
-        # Find nearby structure to interact with
+        # Find nearest structure within range
         for s in self._structs:
             sx = s["tx"] * TILE + TILE / 2
             sy = s["ty"] * TILE + TILE / 2
             if math.hypot(sx - self._px, sy - self._py) < TILE * 2:
+                if s["kind"] == "gate":
+                    s["open"] = not s.get("open", False)
+                    self._flash_msg("Gate " + ("opened" if s["open"] else "closed"))
+                    return
                 if s["kind"] == "hearth":
                     wood = self._inv.get("wood", 0)
                     if wood > 0:
@@ -1014,9 +1023,14 @@ class MAHisLANDPane(tk.Canvas):
                 col = _STRUCT_COLOR.get(s["kind"], _MID)
                 hp_frac = s["hp"] / s["max_hp"]
                 pad = int(TILE * 0.1 + TILE * 0.15 * (1 - hp_frac))
-                self.create_rectangle(sx + pad, sy + pad,
-                                      sx + TILE - pad - 1, sy + TILE - pad - 1,
-                                      fill=col, outline=_BORDER if s["kind"] == "hearth" else "")
+                if s["kind"] == "gate" and s.get("open", False):
+                    self.create_rectangle(sx + pad, sy + pad,
+                                          sx + TILE - pad - 1, sy + TILE - pad - 1,
+                                          fill="", outline=col, width=2)
+                else:
+                    self.create_rectangle(sx + pad, sy + pad,
+                                          sx + TILE - pad - 1, sy + TILE - pad - 1,
+                                          fill=col, outline=_BORDER if s["kind"] == "hearth" else "")
                 if s["kind"] == "hearth":
                     fuel = s.get("fuel", 0)
                     self.create_text(sx + TILE // 2, sy + TILE // 2,
@@ -1088,32 +1102,38 @@ class MAHisLANDPane(tk.Canvas):
         zone = "CLAIMED" if self._claimed(ptx, pty) else "WILD"
         self.create_text(8, 38, anchor="nw", text=zone, fill=_HUD, font=("Consolas", 7))
 
-        # Hotbar — fist | food count | build indicator
+        # Hotbar — [1] FIST | [2] HAMMER | [3] FOOD (consumable, never selected)
         bsize = 36
-        slots_data = [
-            ("FIST",  _BRIGHT),
-            (f"EAT [F]\n{self._inv.get('food', 0)} food", _MID),
+        equip_slots = [
+            (0, "FIST"),
+            (1, "HAMMER"),
         ]
-        total_w = len(slots_data) * (bsize + 4)
+        total_w = (len(equip_slots) + 1) * (bsize + 4)
         hx = self._vw // 2 - total_w // 2
         hy = self._vh - bsize - 8
-        for i, (label, col) in enumerate(slots_data):
-            x = hx + i * (bsize + 4)
-            sel = i == self._hotbar_sel
+        for idx, (slot_id, label) in enumerate(equip_slots):
+            x = hx + idx * (bsize + 4)
+            sel = self._hotbar_sel == slot_id
+            # HAMMER: show blueprint name when queued
+            disp = (self._build_sel[:6] if self._build_sel else label) if slot_id == 1 else label
             self.create_rectangle(x, hy, x + bsize, hy + bsize,
                                   fill=_CHROME if sel else _BG,
                                   outline=_BRIGHT if sel else _BORDER)
             self.create_text(x + bsize // 2, hy + bsize // 2,
-                             text=label, fill=col if sel else _DIM,
+                             text=disp, fill=_BRIGHT if sel else _DIM,
                              font=("Consolas", 6), justify="center")
-        # Blueprint indicator
-        if self._build_sel:
-            bx = hx + len(slots_data) * (bsize + 4) + 8
-            self.create_rectangle(bx, hy, bx + 60, hy + bsize,
-                                  fill=_CHROME, outline=_BRIGHT)
-            self.create_text(bx + 30, hy + bsize // 2,
-                             text=self._build_sel[:7], fill=_BRIGHT,
-                             font=("Consolas", 6), justify="center")
+            self.create_text(x + 3, hy + 3, anchor="nw",
+                             text=str(slot_id + 1), fill=_DIM, font=("Consolas", 5))
+        # Food slot — consumable style (no selection highlight)
+        fx = hx + len(equip_slots) * (bsize + 4)
+        food_n = self._inv.get("food", 0)
+        self.create_rectangle(fx, hy, fx + bsize, hy + bsize,
+                              fill=_BG, outline=_BORDER, dash=(3, 3))
+        self.create_text(fx + bsize // 2, hy + bsize // 2,
+                         text=f"FOOD\n{food_n}", fill=_MID if food_n else _DIM,
+                         font=("Consolas", 6), justify="center")
+        self.create_text(fx + 3, hy + 3, anchor="nw",
+                         text="3", fill=_DIM, font=("Consolas", 5))
 
         # Gear indicators
         gear_x = self._vw - 8
@@ -1130,7 +1150,7 @@ class MAHisLANDPane(tk.Canvas):
 
         # Controls hint
         self.create_text(self._vw // 2, self._vh - bsize - 20, anchor="s",
-                         text="WASD move | LClick swing | F eat | B build menu | RClick place/interact | I inventory | ESC exit",
+                         text="WASD move | 1 fist  2 hammer  3/F eat | LClick use equipped | RClick interact/open | R build menu | I inventory | ESC exit",
                          fill=_DIM, font=("Consolas", 7))
 
     def _bar(self, x: int, y: int, w: int, h: int, frac: float,
