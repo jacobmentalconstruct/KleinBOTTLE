@@ -97,6 +97,22 @@ HEARTH_RADIUS = 10
 # Fuel burn: 1 wood / 5 sec + 1 wood / 5 sec per 10 path tiles
 HEARTH_FUEL_TICK = 5.0  # seconds
 
+# Mob constants
+MOB_SIGHT      = TILE * 8     # px
+MOB_WANDER_SPD = 60           # px/s
+MOB_FLEE_SPD   = 275          # critter flee
+MOB_CHASE_SPD  = 237          # raider chase
+MOB_WANDER_DUR = 3.0          # seconds moving
+MOB_PAUSE_DUR  = 1.0          # seconds paused
+RAIDER_CONTACT_DMG = 10       # per second to player
+RAIDER_WALL_DMG    = 8        # per second to wall
+
+MOB_CRITTER_HP = 30
+MOB_RAIDER_HP  = 60
+MOB_CAP_CRITTER = 15
+MOB_CAP_RAIDER  = 10
+MOB_SPAWN_INTERVAL = 5.0      # seconds between spawn attempts
+
 # ── Gear ─────────────────────────────────────────────────────────────
 _GEAR_RECIPES = {
     "gather_tool": {"wood": 5,  "stone": 5,  "leather": 2},
@@ -209,6 +225,11 @@ class MAHisLANDPane(tk.Canvas):
         # Inventory drawer open
         self._inv_open = False
 
+        # Mobs: list of {kind, x, y, hp, max_hp, state, state_t, vx, vy, dmg_cd}
+        # state: "wander" | "pause" | "flee" | "chase"
+        self._mobs: list[dict] = []
+        self._spawn_acc = 0.0
+
         # Hearth fuel/claim tick accumulator
         self._fuel_acc = 0.0
 
@@ -278,11 +299,21 @@ class MAHisLANDPane(tk.Canvas):
             self._hotbar_sel = (self._hotbar_sel + 1) % 9
 
     def _on_lclick(self, event: tk.Event) -> None:
-        # Inventory drawer: click recipe
         if self._inv_open:
             self._handle_inv_click(event.x, event.y)
             return
-        self._do_swing()
+        # Hotbar slot 0 = fist/swing; slots 1-7 = build blueprints; slot 8 = food
+        sel = self._hotbar_sel
+        if sel == 0:
+            self._do_swing()
+        elif sel == 8:
+            self._eat_food()
+        elif 1 <= sel <= 7:
+            idx = sel - 1
+            if idx < len(_BUILD_HOTBAR):
+                self._do_place(_BUILD_HOTBAR[idx])
+        else:
+            self._do_swing()
 
     def _on_rclick(self, _event: tk.Event) -> None:
         # Interact: deposit fuel into Hearth, eat food, etc.
@@ -372,6 +403,13 @@ class MAHisLANDPane(tk.Canvas):
             self._fuel_acc -= HEARTH_FUEL_TICK
             self._burn_hearths()
 
+        # Mob spawn + update
+        self._spawn_acc += dt
+        if self._spawn_acc >= MOB_SPAWN_INTERVAL:
+            self._spawn_acc -= MOB_SPAWN_INTERVAL
+            self._try_spawn_mob()
+        self._update_mobs(dt)
+
         # Node respawn
         for node in self._nodes:
             if node["respawn"] > 0:
@@ -438,6 +476,21 @@ class MAHisLANDPane(tk.Canvas):
             if dist < best_dist:
                 best_dist = dist
                 best_node = node
+
+        # Hit mobs in arc (checked before nodes — same unified hitbox)
+        combat_dmg = 30 if "weapon" in self._gear else SWING_DMG
+        for mob in self._mobs:
+            mdist = math.hypot(mob["x"] - self._px, mob["y"] - self._py)
+            if mdist > SWING_RANGE:
+                continue
+            mob_angle = math.atan2(mob["y"] - self._py, mob["x"] - self._px)
+            diff = abs(math.atan2(math.sin(mob_angle - self._angle),
+                                  math.cos(mob_angle - self._angle)))
+            if diff > math.pi * 0.45:
+                continue
+            mob["hp"] -= combat_dmg
+            self._flash_msg(f"Hit {mob['kind']}  {max(0,mob['hp'])}/{mob['max_hp']}")
+            return
 
         if best_node is not None:
             best_node["hp"] -= dmg
@@ -577,6 +630,158 @@ class MAHisLANDPane(tk.Canvas):
                     return True
         return False
 
+    def _eat_food(self) -> None:
+        if self._inv.get("food", 0) <= 0:
+            self._flash_msg("No food")
+            return
+        self._inv["food"] -= 1
+        self._hunger = min(P_HN_MAX, self._hunger + FOOD_RESTORE_HN)
+        self._hp     = min(P_HP_MAX, self._hp     + FOOD_RESTORE_HP)
+        self._flash_msg(f"Ate food  HP:{int(self._hp)}  HN:{int(self._hunger)}")
+
+    # ── Mob AI ───────────────────────────────────────────────────────
+
+    def _try_spawn_mob(self) -> None:
+        critters = sum(1 for m in self._mobs if m["kind"] == "critter")
+        raiders  = sum(1 for m in self._mobs if m["kind"] == "raider")
+        kind = None
+        if critters < MOB_CAP_CRITTER and raiders < MOB_CAP_RAIDER:
+            kind = random.choice(["critter", "critter", "raider"])
+        elif critters < MOB_CAP_CRITTER:
+            kind = "critter"
+        elif raiders < MOB_CAP_RAIDER:
+            kind = "raider"
+        if kind is None:
+            return
+
+        # Pick a random unclaimed tile away from player
+        for _ in range(30):
+            tx = random.randint(1, W_TILES - 2)
+            ty = random.randint(1, H_TILES - 2)
+            if self._grid[ty][tx] == T_WALL:
+                continue
+            wx = tx * TILE + TILE / 2
+            wy = ty * TILE + TILE / 2
+            if math.hypot(wx - self._px, wy - self._py) < TILE * 12:
+                continue
+            if self._claimed(tx, ty):
+                continue
+            hp = MOB_CRITTER_HP if kind == "critter" else MOB_RAIDER_HP
+            self._mobs.append({
+                "kind": kind, "x": wx, "y": wy,
+                "hp": hp, "max_hp": hp,
+                "state": "wander", "state_t": MOB_WANDER_DUR,
+                "vx": 0.0, "vy": 0.0,
+                "dmg_cd": 0.0,
+            })
+            return
+
+    def _update_mobs(self, dt: float) -> None:
+        dead = []
+        for mob in self._mobs:
+            self._update_one_mob(mob, dt)
+            if mob["hp"] <= 0:
+                dead.append(mob)
+        for mob in dead:
+            self._mobs.remove(mob)
+            self._drop_mob(mob)
+
+    def _update_one_mob(self, mob: dict, dt: float) -> None:
+        dx = self._px - mob["x"]
+        dy = self._py - mob["y"]
+        dist = math.hypot(dx, dy)
+
+        if mob["kind"] == "critter":
+            if dist < MOB_SIGHT:
+                mob["state"] = "flee"
+            elif mob["state"] == "flee":
+                mob["state"] = "wander"
+                mob["state_t"] = MOB_WANDER_DUR
+
+            if mob["state"] == "flee":
+                # Flee directly away
+                if dist > 0:
+                    mob["vx"] = -(dx / dist) * MOB_FLEE_SPD
+                    mob["vy"] = -(dy / dist) * MOB_FLEE_SPD
+            else:
+                self._wander_tick(mob, dt)
+
+        else:  # raider
+            if dist < MOB_SIGHT:
+                mob["state"] = "chase"
+            elif mob["state"] == "chase" and dist > MOB_SIGHT * 1.5:
+                mob["state"] = "wander"
+                mob["state_t"] = MOB_WANDER_DUR
+
+            if mob["state"] == "chase":
+                if dist > 0:
+                    mob["vx"] = (dx / dist) * MOB_CHASE_SPD
+                    mob["vy"] = (dy / dist) * MOB_CHASE_SPD
+            else:
+                self._wander_tick(mob, dt)
+
+            # Contact damage to player
+            if dist < TILE * 1.2:
+                if mob["dmg_cd"] <= 0:
+                    dmg = RAIDER_CONTACT_DMG
+                    if "tunic" in self._gear:
+                        dmg = dmg // 2
+                    self._hp = max(0, self._hp - dmg)
+                    mob["dmg_cd"] = 1.0
+                    if self._hp <= 0:
+                        self._state = "dead"
+                else:
+                    mob["dmg_cd"] -= dt
+
+            # Attack adjacent walls/structures
+            for s in self._structs:
+                if s["kind"] not in ("wall", "gate", "spike"):
+                    continue
+                sx = s["tx"] * TILE + TILE / 2
+                sy = s["ty"] * TILE + TILE / 2
+                if math.hypot(sx - mob["x"], sy - mob["y"]) < TILE * 1.4:
+                    s["hp"] -= RAIDER_WALL_DMG * dt
+            self._structs = [s for s in self._structs if s["hp"] > 0]
+
+        # Move mob
+        nx = mob["x"] + mob["vx"] * dt
+        ny = mob["y"] + mob["vy"] * dt
+        if self._passable(nx, mob["y"]):
+            mob["x"] = nx
+        else:
+            mob["vx"] *= -1
+        if self._passable(mob["x"], ny):
+            mob["y"] = ny
+        else:
+            mob["vy"] *= -1
+
+        # Clamp to world
+        mob["x"] = max(TILE, min(mob["x"], (W_TILES - 1) * TILE))
+        mob["y"] = max(TILE, min(mob["y"], (H_TILES - 1) * TILE))
+
+    def _wander_tick(self, mob: dict, dt: float) -> None:
+        mob["state_t"] -= dt
+        if mob["state_t"] <= 0:
+            if mob["state"] == "wander":
+                mob["state"] = "pause"
+                mob["state_t"] = MOB_PAUSE_DUR
+                mob["vx"] = mob["vy"] = 0.0
+            else:
+                mob["state"] = "wander"
+                mob["state_t"] = MOB_WANDER_DUR
+                angle = random.uniform(0, math.pi * 2)
+                mob["vx"] = math.cos(angle) * MOB_WANDER_SPD
+                mob["vy"] = math.sin(angle) * MOB_WANDER_SPD
+
+    def _drop_mob(self, mob: dict) -> None:
+        if mob["kind"] == "critter":
+            self._inv["food"]    = self._inv.get("food",    0) + 2
+            self._inv["leather"] = self._inv.get("leather", 0) + 1
+            self._flash_msg("+2 food  +1 leather")
+        else:
+            self._inv["leather"] = self._inv.get("leather", 0) + 2
+            self._flash_msg("+2 leather")
+
     # ── HUD helpers ──────────────────────────────────────────────────
 
     def _flash_msg(self, text: str) -> None:
@@ -648,6 +853,30 @@ class MAHisLANDPane(tk.Canvas):
                     self.create_text(sx + TILE // 2, sy + TILE // 2,
                                      text=str(fuel), fill=_HUD, font=("Consolas", 7))
 
+        # Mobs
+        for mob in self._mobs:
+            sx = mob["x"] - self._camx
+            sy = mob["y"] - self._camy
+            if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
+                r = TILE * 0.35
+                col = _MID if mob["kind"] == "critter" else _BRIGHT
+                # Critter = circle, raider = diamond
+                if mob["kind"] == "critter":
+                    self.create_oval(sx - r, sy - r, sx + r, sy + r,
+                                     fill=col, outline="")
+                else:
+                    pts = [sx, sy - r, sx + r, sy, sx, sy + r, sx - r, sy]
+                    self.create_polygon(pts, fill=col, outline="")
+                # HP bar above mob
+                bw = int(TILE * 0.8)
+                hp_f = mob["hp"] / mob["max_hp"]
+                self.create_rectangle(sx - bw//2, sy - r - 5,
+                                      sx + bw//2, sy - r - 1,
+                                      fill=_BG, outline="")
+                self.create_rectangle(sx - bw//2, sy - r - 5,
+                                      sx - bw//2 + int(bw * hp_f), sy - r - 1,
+                                      fill=col, outline="")
+
         # Swing flash: line from player to tip
         if self._swing_flash:
             ox, oy, ax, ay, ttl = self._swing_flash
@@ -692,7 +921,7 @@ class MAHisLANDPane(tk.Canvas):
 
         # Hotbar (bottom centre)
         slots = ["[fist]"] + [_BUILD_HOTBAR[i] if i < len(_BUILD_HOTBAR) else "---"
-                               for i in range(8)]
+                               for i in range(7)] + ["[eat]"]
         bsize = 32
         total = 9 * (bsize + 2)
         hx = self._vw // 2 - total // 2
@@ -723,7 +952,7 @@ class MAHisLANDPane(tk.Canvas):
 
         # Controls hint
         self.create_text(self._vw // 2, self._vh - bsize - 20, anchor="s",
-                         text="WASD move | LClick swing | RClick interact | I inventory | ESC exit",
+                         text="WASD move | 1=fist 2-8=build 9=eat | LClick act | RClick refuel/interact | I inventory | ESC exit",
                          fill=_DIM, font=("Consolas", 7))
 
     def _bar(self, x: int, y: int, w: int, h: int, frac: float,
