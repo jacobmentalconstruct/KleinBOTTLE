@@ -434,7 +434,7 @@ class SpaceInvadersPane(tk.Canvas):
     def _title_screen(self) -> None:
         cx, cy = self.W // 2, self.H // 2
 
-        self.create_text(cx, cy - 90, text="SPACE",
+        self.create_text(cx, cy - 90, text="NULL",
                          fill=_GH, font=("Consolas", 24, "bold"))
         self.create_text(cx, cy - 58, text="INVADERS",
                          fill=_GH, font=("Consolas", 24, "bold"))
@@ -507,8 +507,8 @@ class SpaceInvadersPane(tk.Canvas):
 # =====================================================================
 
 class SpaceInvaders(KleinGame):
-    title = "Space Invaders"
-    description = "Classic arcade shoot-'em-up. Blast the invaders before they land."
+    title = "NULL Invaders"
+    description = "Blast the invaders before they breach the null line."
 
     def create(self, parent: tk.Widget, on_exit: Callable) -> tk.Widget:
         return SpaceInvadersPane(parent, on_exit=on_exit)
