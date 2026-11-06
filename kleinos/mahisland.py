@@ -9,12 +9,16 @@ Controls:  WASD move  |  Mouse aim  |  LClick swing/place  |  RClick/E interact
 
 from __future__ import annotations
 
+import json
 import math
 import random
 import tkinter as tk
+from pathlib import Path
 from typing import Callable, Optional
 
 from kleinos.klein_app import KleinGame
+
+_SAVE_PATH = Path(__file__).resolve().parent.parent / "data" / "mahisland_save.json"
 from kleinos.palette import (
     BG as _BG,
     GM_DARK as _DARK, GM_MID as _MID, GM_BRIGHT as _BRIGHT, FG_HUD as _HUD,
@@ -113,6 +117,13 @@ MOB_RAIDER_HP  = 60
 MOB_CAP_CRITTER = 15
 MOB_CAP_RAIDER  = 10
 MOB_SPAWN_INTERVAL = 5.0      # seconds between spawn attempts
+
+# Scoring
+SCORE_PER_SEC = 2
+SCORE_CRITTER = 5
+SCORE_RAIDER  = 15
+SCORE_STRUCT  = 10
+SCORE_CRAFT   = 20
 
 # ── Gear ─────────────────────────────────────────────────────────────
 _GEAR_RECIPES = {
@@ -267,6 +278,9 @@ class MAHisLANDPane(tk.Canvas):
         self._last_t: Optional[float] = None
 
         self._reset_world()
+        self._state = "start"           # always open to start screen
+        self._high_score = self._load_high_score()
+        self._has_save   = _SAVE_PATH.exists()
 
         # Bindings
         self.bind("<KeyPress>",   lambda e: self._keys.add(e.keysym.lower()))
@@ -274,7 +288,7 @@ class MAHisLANDPane(tk.Canvas):
         self.bind("<Motion>",     self._on_mouse)
         self.bind("<Button-1>",   self._on_lclick)
         self.bind("<Button-3>",   self._on_rclick)
-        self.bind("<Escape>",     lambda _e: self._do_exit())
+        self.bind("<Escape>",     self._on_escape)
         self.bind("<MouseWheel>", self._on_scroll)
         self.focus_set()
 
@@ -309,6 +323,8 @@ class MAHisLANDPane(tk.Canvas):
         self._spawn_acc = 0.0
         self._fuel_acc = 0.0
         self._hunger_acc = 0.0
+        self._score = 0
+        self._score_acc = 0.0
         self._state = "play"
         self._msg = ""
         self._msg_ttl = 0.0
@@ -343,6 +359,21 @@ class MAHisLANDPane(tk.Canvas):
         self._mx = event.x + self._camx
         self._my = event.y + self._camy
 
+    def _on_escape(self, _event: tk.Event) -> None:
+        if self._state == "start":
+            self._do_exit()
+        elif self._state in ("dead",):
+            self._do_exit()
+        elif self._state == "confirm_exit":
+            self._state = "play"
+        elif self._state == "play":
+            if self._build_menu_open:
+                self._build_menu_open = False
+            elif self._inv_open:
+                self._inv_open = False
+            else:
+                self._state = "confirm_exit"
+
     def _on_scroll(self, event: tk.Event) -> None:
         # Scroll hotbar selection
         if event.delta > 0:
@@ -376,10 +407,36 @@ class MAHisLANDPane(tk.Canvas):
     # ── Update ───────────────────────────────────────────────────────
 
     def _update(self, dt: float) -> None:
+        if self._state == "start":
+            k = self._keys
+            if "n" in k:
+                k.discard("n")
+                self._reset_world()         # state → "play"
+            elif "c" in k and self._has_save:
+                k.discard("c")
+                self._load_game()           # state → "play"
+            return
+
         if self._state == "dead":
             if "r" in self._keys:
                 self._keys.discard("r")
-                self._reset_world()
+                self._update_high_score()
+                self._clear_save()
+                self._has_save = False
+                self._state = "start"
+            return
+
+        if self._state == "confirm_exit":
+            k = self._keys
+            if "y" in k:
+                k.discard("y")
+                self._save_game()
+                self._update_high_score()
+                self._has_save = True
+                self._state = "start"
+            elif "n" in k:
+                k.discard("n")
+                self._state = "play"
             return
 
         k = self._keys
@@ -489,6 +546,12 @@ class MAHisLANDPane(tk.Canvas):
                 if node["respawn"] <= 0:
                     node["respawn"] = 0.0
                     node["hp"] = node["max_hp"]
+
+        # Score: time survived
+        self._score_acc += dt
+        if self._score_acc >= 1.0:
+            self._score_acc -= 1.0
+            self._score += SCORE_PER_SEC
 
         # Message timeout
         if self._msg_ttl > 0:
@@ -665,7 +728,8 @@ class MAHisLANDPane(tk.Canvas):
             s["fuel"] = 0
             s["claimed"] = False
         self._structs.append(s)
-        self._flash_msg(f"Placed {kind}")
+        self._score += SCORE_STRUCT
+        self._flash_msg(f"Placed {kind}  +{SCORE_STRUCT}pts")
 
     def _do_craft(self, item: str) -> None:
         if item in _GEAR_RECIPES:
@@ -692,7 +756,8 @@ class MAHisLANDPane(tk.Canvas):
         for res, qty in recipe.items():
             self._inv[res] -= qty
         self._gear.add(item)
-        self._flash_msg(f"Crafted {item}!")
+        self._score += SCORE_CRAFT
+        self._flash_msg(f"Crafted {item}!  +{SCORE_CRAFT}pts")
 
     def _handle_build_click(self, cx: int, cy: int) -> None:
         x0, y0 = self._build_menu_pos()
@@ -929,10 +994,81 @@ class MAHisLANDPane(tk.Canvas):
         if mob["kind"] == "critter":
             self._inv["food"]    = self._inv.get("food",    0) + 2
             self._inv["leather"] = self._inv.get("leather", 0) + 1
-            self._flash_msg("+2 food  +1 leather")
+            self._score += SCORE_CRITTER
+            self._flash_msg(f"+2 food  +1 leather  +{SCORE_CRITTER}pts")
         else:
             self._inv["leather"] = self._inv.get("leather", 0) + 2
-            self._flash_msg("+2 leather")
+            self._score += SCORE_RAIDER
+            self._flash_msg(f"+2 leather  +{SCORE_RAIDER}pts")
+
+    # ── Persistence ──────────────────────────────────────────────────────
+
+    def _save_game(self) -> None:
+        data = {
+            "high_score": max(self._high_score, self._score),
+            "game": {
+                "grid":       self._grid,
+                "nodes":      self._nodes,
+                "px": self._px, "py": self._py,
+                "angle":      self._angle,
+                "hp":         self._hp,
+                "hunger":     self._hunger,
+                "inv":        self._inv,
+                "gear":       list(self._gear),
+                "structs":    self._structs,
+                "score":      self._score,
+                "spawn_acc":  self._spawn_acc,
+                "fuel_acc":   self._fuel_acc,
+                "hunger_acc": self._hunger_acc,
+            }
+        }
+        try:
+            _SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _SAVE_PATH.write_text(json.dumps(data))
+        except Exception:
+            pass
+
+    def _load_game(self) -> None:
+        try:
+            data = json.loads(_SAVE_PATH.read_text())
+            self._reset_world()     # seed all fields; state → "play"
+            g = data["game"]
+            self._grid        = g["grid"]
+            self._nodes       = g["nodes"]
+            self._px          = g["px"]
+            self._py          = g["py"]
+            self._angle       = g["angle"]
+            self._hp          = g["hp"]
+            self._hunger      = g["hunger"]
+            self._inv         = g["inv"]
+            self._gear        = set(g["gear"])
+            self._structs     = g["structs"]
+            self._score       = g.get("score", 0)
+            self._spawn_acc   = g.get("spawn_acc", 0.0)
+            self._fuel_acc    = g.get("fuel_acc", 0.0)
+            self._hunger_acc  = g.get("hunger_acc", 0.0)
+            self._high_score  = data.get("high_score", self._high_score)
+            self._camx = self._px - self._vw / 2
+            self._camy = self._py - self._vh / 2
+        except Exception:
+            self._reset_world()
+
+    def _load_high_score(self) -> int:
+        try:
+            return json.loads(_SAVE_PATH.read_text()).get("high_score", 0)
+        except Exception:
+            return 0
+
+    def _update_high_score(self) -> None:
+        if self._score > self._high_score:
+            self._high_score = self._score
+
+    def _clear_save(self) -> None:
+        try:
+            if _SAVE_PATH.exists():
+                _SAVE_PATH.unlink()
+        except Exception:
+            pass
 
     # ── HUD helpers ──────────────────────────────────────────────────
 
