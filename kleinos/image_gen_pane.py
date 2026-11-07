@@ -461,6 +461,10 @@ class ImageGenPane(tk.Frame):
                 self.after(0, self._hide_log)
             else:
                 self.after(0, lambda: self._status("No image returned."))
+        except ImportError as exc:
+            pkg = str(exc).replace("No module named ", "").strip("'\"")
+            msg = f"Missing dependency: {pkg} — pip install {pkg}"
+            self.after(0, lambda: self._status(msg))
         except Exception as exc:
             msg = str(exc)[:120]
             self.after(0, lambda: self._status(f"Error: {msg}"))
