@@ -482,11 +482,16 @@ class KleinPC:
         self._content = tk.Frame(parent, bg=_CONTENT_BG)
         self._content.pack(side="left", fill="both", expand=True)
 
-    def _swap(self, factory: Callable[[], tk.Widget]) -> None:
+    def _swap(self, factory: Callable[[], tk.Widget], *, center: bool = False) -> None:
         for w in self._content.winfo_children():
             w.destroy()
         widget = factory()
-        widget.pack(fill="both", expand=True)
+        if center:
+            # Fixed-size widgets (games) stay their natural size, centred in the content area.
+            # place(relx/rely=0.5) reflows automatically when the content frame resizes.
+            widget.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            widget.pack(fill="both", expand=True)
         _after_widget = self._window if self._window is not None else self._content
         _after_widget.after(50, lambda: self._focus_first_input(widget))
 
@@ -540,7 +545,7 @@ class KleinPC:
                     self._content_type = "terminal"
                     self._expand_sidebar()
                     self._select_terminal()
-                self._swap(lambda i=item: i.create(self._content, on_exit=_game_exit))  # type: ignore[attr-defined]
+                self._swap(lambda i=item: i.create(self._content, on_exit=_game_exit), center=True)  # type: ignore[attr-defined]
             else:
                 self._content_type = "app"
                 self._swap(lambda i=item: i.create(self._content, on_exit=self._select_terminal))  # type: ignore[attr-defined]
