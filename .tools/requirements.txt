@@ -1,0 +1,3 @@
+# .dev-tools dependencies
+# Standard library only — no external packages required.
+# Python 3.10+ required for: sqlite3, hashlib, pathlib, tkinter, json, uuid
