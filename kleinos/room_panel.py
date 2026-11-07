@@ -189,6 +189,18 @@ class RoomImagePanel(tk.Frame):
 
     def _start_generation(self, room_id: str, room_name: str,
                            description: str, area: str) -> None:
+        # Silently skip if pipeline is offline (auto-triggered, non-interactive)
+        try:
+            import urllib.request as _ur
+            from kleinos import config as _cfg
+            c = _cfg.load().get("image_pipeline", {})
+            host = c.get("comfyui_host", "127.0.0.1")
+            port = int(c.get("comfyui_port", 8188))
+            with _ur.urlopen(f"http://{host}:{port}/system_stats", timeout=0.8):
+                pass
+        except Exception:
+            self._generating = False
+            return
         self._generating = True
         self._regen_btn.configure(state="disabled")
         self._set_status("Generating…")

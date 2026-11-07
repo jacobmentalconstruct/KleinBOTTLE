@@ -25,6 +25,9 @@ _DEFAULTS: dict = {
     "image_pipeline": {
         "path": "",
         "github_url": "https://github.com/jacobmentalconstruct/image-generation-pipeline.git",
+        "comfyui_path": "",
+        "comfyui_host": "127.0.0.1",
+        "comfyui_port": 8188,
     },
     "audio": {
         "enabled": True,
