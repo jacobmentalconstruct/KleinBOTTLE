@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from kleinos.klein_app import KleinApp
-from kleinos.room_panel import _pipeline_root
+from kleinos.pipeline_client import ensure_on_path as _pipeline_ensure_on_path
 
 try:
     from PIL import Image as _PilImage, ImageEnhance as _PilEnhance  # type: ignore[import-untyped]
@@ -56,6 +56,7 @@ _FILTERS = (
     ("Sharpen",    "sharpen"),
     ("Edge",       "edge"),
     ("Invert",     "invert"),
+    ("ASCII",      "ascii"),
 )
 
 # Lines in ComfyUI stdout that mean the server is ready
@@ -356,9 +357,9 @@ class ImageGenPane(tk.Frame):
 
     def _worker(self, prompt: str, style: str) -> None:
         try:
-            root = _pipeline_root()
-            if str(root) not in sys.path:
-                sys.path.insert(0, str(root))
+            if not _pipeline_ensure_on_path():
+                self.after(0, lambda: self._status("Pipeline not found — check submodule."))
+                return
             from pipeline.client import collect_images, queue_prompt, wait_for_completion  # type: ignore[import]
             from pipeline.styles import build_workflow  # type: ignore[import]
 
@@ -430,6 +431,14 @@ class ImageGenPane(tk.Frame):
             return
         self._active_filter = key
         self._update_filter_buttons()
+        if key == "ascii":
+            self._status("Converting to ASCII… (requires torch)")
+            threading.Thread(
+                target=self._ascii_worker,
+                args=(self._orig_img,),
+                daemon=True,
+            ).start()
+            return
         try:
             filtered = self._run_filter(self._orig_img, key)
             w = self._canvas.winfo_width()
@@ -438,6 +447,53 @@ class ImageGenPane(tk.Frame):
             self._status(f"Filter: {key}")
         except Exception as exc:
             self._status(f"Filter error: {exc}")
+
+    def _ascii_worker(self, orig_img: object) -> None:
+        try:
+            from kleinos.pipeline_client import convert_available, ensure_on_path
+            if not convert_available():
+                self.after(0, lambda: self._status("ASCII needs torch+numpy — pip install torch numpy"))
+                self.after(0, self._reset_filter)
+                return
+            ensure_on_path()
+            from pipeline.convert import to_ascii  # type: ignore[import]
+            import tempfile, os
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                orig_img.save(tmp_path)  # type: ignore[union-attr]
+                w = self._canvas.winfo_width() or 320
+                cols = max(40, min(120, w // 7))
+                art = to_ascii(tmp_path, width=cols, iterations=150)
+            finally:
+                os.unlink(tmp_path)
+
+            img = self._ascii_to_image(art)
+            self.after(0, lambda i=img: self._render(i, self._canvas.winfo_width(), self._canvas.winfo_height()))
+            self.after(0, lambda: self._status("Filter: ascii"))
+        except Exception as exc:
+            msg = str(exc)[:100]
+            self.after(0, lambda: self._status(f"ASCII error: {msg}"))
+            self.after(0, self._reset_filter)
+
+    @staticmethod
+    def _ascii_to_image(art: str) -> object:
+        """Render ASCII art string to a PIL image using monospace font in KleinOS green."""
+        lines = art.splitlines()
+        cols  = max((len(l) for l in lines), default=1)
+        rows  = len(lines) or 1
+        ch_w, ch_h = 7, 13
+        img_w, img_h = cols * ch_w + 4, rows * ch_h + 4
+        img = _PilImage.new("RGB", (img_w, img_h), color=(1, 10, 1))  # type: ignore[union-attr]
+        from PIL import ImageDraw, ImageFont  # type: ignore[import]
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("Consola.ttf", 12)
+        except Exception:
+            font = ImageFont.load_default()
+        for row_i, line in enumerate(lines):
+            draw.text((2, 2 + row_i * ch_h), line, fill=(0, 204, 51), font=font)
+        return img
 
     def _reset_filter(self) -> None:
         if self._orig_img is None:
@@ -490,7 +546,7 @@ class ImageGenPane(tk.Frame):
         h = self._canvas.winfo_height()
         if w < 2 or h < 2:
             return
-        if self._active_filter:
+        if self._active_filter and self._active_filter != "ascii":
             try:
                 img = self._run_filter(self._orig_img, self._active_filter)
             except Exception:

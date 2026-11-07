@@ -19,7 +19,6 @@ green phosphor tint (grayscale → green channel).
 from __future__ import annotations
 
 import shutil
-import sys
 import threading
 import uuid
 from pathlib import Path
@@ -36,20 +35,8 @@ except ImportError:
 
 _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
 
-_SUBMODULE_PIPELINE = Path(__file__).resolve().parent.parent / "tools" / "image-pipeline"
+from kleinos.pipeline_client import ensure_on_path as _pipeline_ensure_on_path
 
-
-def _pipeline_root() -> Path:
-    """Read pipeline path from config at call time so settings changes take effect."""
-    try:
-        from kleinos import config as _cfg
-        c = _cfg.load()
-        p = c.get("image_pipeline", {}).get("path", "")
-        if p:
-            return Path(p)
-    except Exception:
-        pass
-    return _SUBMODULE_PIPELINE
 _ROOMS_DIR = Path(__file__).resolve().parent.parent / "data" / "rooms"
 
 _BG        = "#010a01"
@@ -213,9 +200,9 @@ class RoomImagePanel(tk.Frame):
     def _generate_worker(self, room_id: str, room_name: str,
                           description: str, area: str) -> None:
         try:
-            root = _pipeline_root()
-            if str(root) not in sys.path:
-                sys.path.insert(0, str(root))
+            if not _pipeline_ensure_on_path():
+                self.after(0, lambda: self._set_status("Pipeline not found — check submodule."))
+                return
             from pipeline.client import collect_images, queue_prompt, wait_for_completion  # type: ignore[import]
             from pipeline.styles import build_workflow  # type: ignore[import]
 
