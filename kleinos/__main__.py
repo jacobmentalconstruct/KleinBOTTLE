@@ -174,9 +174,9 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
 
         # Use the config-based scale (same as the original Toplevel window did).
         # Dynamic scaling deferred until apps/games are built to support it.
-        from kleinos import _config as _cfg
-        _startup_cfg = _cfg.load()
-        pc_scale = _cfg._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
+        from kleinos.config import load as _cfg_load, _PC_SIZES
+        _startup_cfg = _cfg_load()
+        pc_scale = _PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
         _NAT_CW, _NAT_CH = 760, 480
 
         KleinPC(
