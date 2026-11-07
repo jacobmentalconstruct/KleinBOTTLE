@@ -37,11 +37,24 @@ class CodeAuditApp(KleinApp):
 
     def commands(self):
         return [
+            ("Scan Project",    self._scan_project),
             ("Scan Duplicates", self._duplicates),
             ("Dead Code",       self._dead_code),
             ("Complexity",      self._complexity),
             ("Blocking Calls",  self._blocking),
         ]
+
+    def _scan_project(self) -> str:
+        """Full audit of the kleinos/ source tree — no folder picker needed."""
+        path = str(_KB_ROOT / "kleinos")
+        sections = [
+            f"# KleinOS Self-Audit\n\nTarget: `{path}`\n",
+            dup_render.render_duplicates_markdown(duplicates.build_report(path)),
+            dup_render.render_dead_code_markdown(dead_code.build_report(path)),
+            dup_render.render_complexity_markdown(complexity.build_report(path)),
+            blk_render.render_markdown(scanner.build_report(path)),
+        ]
+        return "\n\n---\n\n".join(sections)
 
     def _duplicates(self) -> str:
         path = _pick_dir("Select directory — Duplicate Scan")
