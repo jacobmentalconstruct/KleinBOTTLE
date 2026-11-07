@@ -4,11 +4,12 @@
     {
       "id": "cat-apps",
       "label": "Apps",
-      "expanded": false,
+      "expanded": true,
       "items": [
         "World Builder",
         "KleinCHAT",
-        "Notes"
+        "Notes",
+        "Image Generator"
       ]
     },
     {
