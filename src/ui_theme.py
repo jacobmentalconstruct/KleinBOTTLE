@@ -6,6 +6,7 @@ sidecars. Widgets keep their existing behavior; only their presentation changes.
 from __future__ import annotations
 
 import tkinter as tk
+from dataclasses import dataclass
 from tkinter import ttk
 
 BACKGROUND = "#1e1e2f"
@@ -22,6 +23,36 @@ FONT_UI = ("Segoe UI", 9)
 FONT_HEADING = ("Segoe UI", 10, "bold")
 FONT_MONO = ("Consolas", 9)
 FONT_STORY = ("Segoe UI", 10)
+
+
+@dataclass
+class Palette:
+    """Token set for a complete UI colour scheme."""
+    background: str
+    inset: str
+    surface: str
+    accent: str
+    text: str
+    muted: str
+    font_heading: tuple
+    font_story: tuple
+
+
+def activate(palette: Palette) -> None:
+    """Replace the active theme tokens with those from *palette*.
+
+    Call before ``apply_theme`` / before surfaces are instantiated.
+    Replaces direct module-global assignment from outside this module.
+    """
+    global BACKGROUND, INSET, SURFACE, ACCENT, TEXT, MUTED, FONT_HEADING, FONT_STORY
+    BACKGROUND   = palette.background
+    INSET        = palette.inset
+    SURFACE      = palette.surface
+    ACCENT       = palette.accent
+    TEXT         = palette.text
+    MUTED        = palette.muted
+    FONT_HEADING = palette.font_heading
+    FONT_STORY   = palette.font_story
 
 
 def apply_theme(root: tk.Tk) -> None:

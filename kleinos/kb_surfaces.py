@@ -52,6 +52,20 @@ def _ensure_path() -> None:
         sys.path.insert(0, _KB_SRC)
 
 
+def _apply_green_theme(root: tk.Misc) -> None:
+    """Activate green phosphor palette via the ui_theme Palette protocol, then
+    apply full ttk styles.  Replaces the former _patch_ui_theme monkey-patch."""
+    _ensure_path()
+    from kleinos import klein_theme as _kt
+    from src.ui_theme import Palette, activate as _activate_ui  # type: ignore[import]
+    _activate_ui(Palette(
+        background=_kt.BG,  inset=_kt.INSET,  surface=_kt.SURFACE,
+        accent=_kt.ACCENT,  text=_kt.TEXT,    muted=_kt.MUTED,
+        font_heading=_kt.FONT_HEADING,         font_story=_kt.FONT_STORY,
+    ))
+    _kt.apply(root)
+
+
 # ── Lazy imports ──────────────────────────────────────────────────────
 
 def _import_builder():
@@ -68,39 +82,6 @@ def _import_game():
     from src.game import GameSession             # type: ignore[import]
     from src.world_store import WorldStore       # type: ignore[import]
     return GameSurface, GameSession, WorldStore
-
-
-# ── Green theme ───────────────────────────────────────────────────────
-
-def _patch_ui_theme() -> None:
-    _ensure_path()
-    try:
-        import src.ui_theme as _ui   # type: ignore[import]
-        from kleinos import klein_theme as _kt
-        _ui.BACKGROUND   = _kt.BG
-        _ui.INSET        = _kt.INSET
-        _ui.SURFACE      = _kt.SURFACE
-        _ui.ACCENT       = _kt.ACCENT
-        _ui.TEXT         = _kt.TEXT
-        _ui.MUTED        = _kt.MUTED
-        _ui.BORDER       = _kt.BORDER
-        _ui.FONT_UI      = _kt.FONT_UI
-        _ui.FONT_HEADING = _kt.FONT_HEADING
-        _ui.FONT_STORY   = _kt.FONT_STORY
-    except ImportError:  # SAFE: src/ui_theme.py is optional (KB surfaces work without it)
-        pass
-
-
-_ui_patched = False
-
-
-def _apply_theme(root: tk.Misc) -> None:
-    global _ui_patched
-    from kleinos import klein_theme
-    klein_theme.apply(root)
-    if not _ui_patched:
-        _patch_ui_theme()
-        _ui_patched = True
 
 
 # ── KleinBuilderPane (Tasks 1 + 4) ───────────────────────────────────
@@ -122,7 +103,7 @@ class KleinBuilderPane(tk.Frame):
         self._on_exit = on_exit
         try:
             ensure_wip()
-            _apply_theme(self)
+            _apply_green_theme(self)
             BuilderSurface, WorldBuilder, WorldStore = _import_builder()
             builder = WorldBuilder(WorldStore(world_path))
 
@@ -221,7 +202,7 @@ class KleinAdventurePane(tk.Frame):
         self._poll_id: Optional[str] = None
         self.bind("<Destroy>", self._on_destroy)
         try:
-            _apply_theme(self)
+            _apply_green_theme(self)
             GameSurface, GameSession, WorldStore = _import_game()
             session = GameSession(WorldStore(world_path))
             self._session = session
