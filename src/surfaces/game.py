@@ -1,6 +1,7 @@
 """Tkinter play surface: structured room display over the standalone game session."""
 from __future__ import annotations
 
+import re
 import tkinter as tk
 from tkinter import ttk
 import queue
@@ -9,6 +10,35 @@ from typing import Optional, Callable
 
 from ..game import GameSession, RoomSnapshot
 from ..ollama_phone import OllamaPhoneError, chat
+
+# Lines produced by look() that are now shown in structured panels — strip from response text.
+_STRUCTURED_LINE = re.compile(
+    r"^(Light|Sound|Weather|Temperature|Time|Mood|Smell|Scent|Noise|Exits|You see|Present)"
+    r"[:\s]",
+    re.IGNORECASE,
+)
+_HINT_LINE = re.compile(
+    r"^(A telephone rings|A computer terminal is available)",
+    re.IGNORECASE,
+)
+
+
+def _filter_response(text: str, room_name: str) -> str:
+    """Remove structured-data lines from engine output; keep pure narrative."""
+    lines = text.splitlines()
+    out = []
+    for line in lines:
+        s = line.strip()
+        if not s:
+            out.append("")
+            continue
+        if _STRUCTURED_LINE.match(s) or _HINT_LINE.match(s):
+            continue
+        # Room name header ("Hall — KleinBOTTLE House" or just "Hall")
+        if s == room_name or s.startswith(room_name + " —") or s.startswith(room_name + " -"):
+            continue
+        out.append(line)
+    return "\n".join(out).strip()
 
 # ── Terminal palette ──────────────────────────────────────────────────────────
 _BG     = "#010a01"
@@ -337,7 +367,9 @@ class GameSurface(tk.Frame):
                 self._request_serial += 1
                 self._phone_busy = False
                 response = self.session.execute(command)
-                self._show_response(f"> {command}\n{response}")
+                snap = self.session.room_snapshot()
+                cleaned = _filter_response(response, snap.room_name)
+                self._show_response(f"> {command}\n{cleaned}" if cleaned else f"> {command}")
                 self.refresh_room()
             elif self._phone_busy:
                 self._show_response("The voice is still responding. You can 'hang up'.")
@@ -348,8 +380,10 @@ class GameSurface(tk.Frame):
                     self._ask_phone(speech)
         else:
             response = self.session.execute(command)
+            snap = self.session.room_snapshot()
+            cleaned = _filter_response(response, snap.room_name)
             computer_request = self.session.consume_computer_request()
-            self._show_response(f"> {command}\n{response}")
+            self._show_response(f"> {command}\n{cleaned}" if cleaned else f"> {command}")
             if self.session.on_phone:
                 self._ask_phone("Hello?")
             self.refresh_room()
