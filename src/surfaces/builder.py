@@ -570,7 +570,7 @@ class BuilderSurface(ttk.Frame):
 
     _DIRECTIONS = [
         "north", "south", "east", "west",
-        "up", "down", "in", "out",
+        "up", "down",
         "northeast", "northwest", "southeast", "southwest",
     ]
     _OPPOSITE = {
