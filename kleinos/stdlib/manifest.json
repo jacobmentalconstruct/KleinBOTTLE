@@ -72,7 +72,22 @@
       ]
     }
   },
-  "apps": [],
+  "apps": [
+    {
+      "id": "duplicate_finder",
+      "path": "kleinos/apps/duplicate_finder/app.py",
+      "summary": "Code structure audit: duplicate functions, dead code, and complexity scores.",
+      "modes": ["duplicates", "dead-code", "complexity"],
+      "stdlib_deps": ["duplicate_code_finder", "similar_code_finder", "dead_code_finder", "python_complexity_scorer"]
+    },
+    {
+      "id": "blocking_scanner",
+      "path": "kleinos/apps/blocking_scanner/app.py",
+      "summary": "Safety audit: blocking calls that can freeze a UI or async thread.",
+      "modes": ["blocking_calls"],
+      "stdlib_deps": ["scan_blocking_calls"]
+    }
+  ],
   "tool_contract": {
     "interface": "run(arguments: dict) -> dict",
     "cli": "python <tool.py> run --input-json '{...}'",
