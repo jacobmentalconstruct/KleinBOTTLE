@@ -159,6 +159,7 @@ class KleinBuilderPane(tk.Frame):
                 get_snapshot=surface.get_form_snapshot,
                 apply_updates=surface.apply_ai_updates,
                 area_rooms=surface.area_rooms,
+                all_rooms=surface.all_rooms,
             )
             assist.pack(fill="both", expand=True)
 

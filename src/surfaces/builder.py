@@ -485,6 +485,10 @@ class BuilderSurface(ttk.Frame):
         area = self.vars["area"].get()
         return [r for r in self.builder.rooms() if r.get("area") == area]
 
+    def all_rooms(self) -> list:
+        """Return all rooms in the world."""
+        return self.builder.rooms()
+
     def export_world(self) -> None:
         path = filedialog.asksaveasfilename(parent=self, defaultextension=".json", filetypes=[("JSON", "*.json")],
                                             initialfile="world-export.json")

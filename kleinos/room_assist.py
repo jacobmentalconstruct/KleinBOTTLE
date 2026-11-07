@@ -3,16 +3,18 @@ kleinos/room_assist.py
 
 Task 4 — Conversational Room Assistant for the World Builder.
 
-A side panel that lets the user chat with a local Ollama model (qwen2.5:3b)
-while editing a room.  The model receives the current form state as context
-and can propose changes to name, description, environment, and objects.
+Mention system:  type <room name or id> in the chat and the assistant
+automatically receives that room's full data plus its direct neighbors
+(rooms it exits to + rooms that exit into it).  The model can then
+suggest connections using real room IDs rather than invented ones.
 
 Callbacks wired by KleinBuilderPane:
-  get_snapshot()      -> dict   read current form values (not saved yet)
-  apply_updates(d)              write partial updates back to form widgets
-  area_rooms()        -> list   rooms in the same area, for context
+  get_snapshot()   -> dict   current form values (unsaved)
+  apply_updates(d)           write partial updates back to form widgets
+  area_rooms()     -> list   rooms in the same area (for nearby context)
+  all_rooms()      -> list   every room in the world (for mention resolution)
 
-UI contract:
+UI:
   reset_chat()   call when the user switches to a different room
 """
 from __future__ import annotations
@@ -38,39 +40,42 @@ _DIM    = "#005500"
 _HDR_BG = "#001a00"
 _WARN   = "#cc6600"
 _BRIGHT = "#00ff66"
+_MENTION = "#00aaff"   # resolved mention highlight
 
 _OLLAMA_HOST  = "127.0.0.1"
 _OLLAMA_PORT  = 11434
 _ASSIST_MODEL = "qwen2.5:3b"
-_MAX_TOKENS   = 512
-_WINDOW_SIZE  = 6   # exchange pairs before summarising
+_MAX_TOKENS   = 600
+_WINDOW_SIZE  = 6
 
 _ALLOWED_UPDATES = {"name", "description", "environment", "objects"}
 
-_SYSTEM_PROMPT = """You are a room design assistant for a text adventure game.
-The user is editing a room and may ask you to describe, improve, or change it.
+# ─── mention syntax: <anything here> ─────────────────────────────────
+_MENTION_RE = re.compile(r"<([^>]+)>")
 
-ROOM STATE (live form values, unsaved):
+_SYSTEM_PROMPT = """\
+You are a room design assistant for a text adventure game.
+The user is editing a room and can ask you to modify it.
+
+CURRENT ROOM (live form, unsaved):
 {room_state}
 
 NEARBY ROOMS IN THIS AREA:
 {nearby}
+{mention_block}\
+{summary_block}\
+You may ONLY suggest changes to: name, description, environment (weather/light/sound), objects.
+Never change id, area, or exits directly — exits are handled by the user.
+If the user asks to connect rooms, suggest the direction and the target room id from the referenced data.
 
-You may suggest changes to these fields only: name, description, environment (weather/light/sound), objects.
-Do NOT modify: id, area, exits.
+Respond ONLY with valid JSON, no markdown, no code fences:
+{{"reply": "conversational message", "updates": {{}}}}
 
-{summary_block}
-Respond ONLY with valid JSON in exactly this format — no markdown, no code fences:
-{{"reply": "your conversational message", "updates": {{}}}}
-
-If you want to change fields, include them in updates.  Examples:
-  "updates": {{"name": "The Den", "description": "A cosy reading room."}}
-  "updates": {{"environment": {{"light": "dim", "sound": "silence"}}}}
-If you are just chatting, use an empty object: "updates": {{}}
+Include changed fields in updates if appropriate. Use empty {{}} if just chatting.
 """
 
 
-# ── Ollama call (independent of ollama_phone.py — needs higher token limit) ──
+# ── Ollama ────────────────────────────────────────────────────────────
 
 def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
     body = json.dumps({
@@ -87,7 +92,9 @@ def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
         data = resp.read(4_000_001)
         if resp.status != 200:
             if resp.status == 404:
-                raise RuntimeError(f"Model '{_ASSIST_MODEL}' not found. Run: ollama pull {_ASSIST_MODEL}")
+                raise RuntimeError(
+                    f"Model '{_ASSIST_MODEL}' not found — run: ollama pull {_ASSIST_MODEL}"
+                )
             raise RuntimeError(f"Ollama returned HTTP {resp.status}")
         result = json.loads(data.decode("utf-8"))
         content = result.get("message", {}).get("content", "").strip()
@@ -101,9 +108,8 @@ def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
 
 
 def _summarise(exchanges: list[dict]) -> str:
-    """Ask the model to summarise old exchanges into one sentence."""
     text = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in exchanges)
-    prompt = f"Summarise the following conversation in one sentence:\n{text}"
+    prompt = f"Summarise this conversation in one sentence:\n{text}"
     try:
         return _ollama_chat([{"role": "user", "content": prompt}], max_tokens=80)
     except Exception:
@@ -111,10 +117,7 @@ def _summarise(exchanges: list[dict]) -> str:
 
 
 def _parse_response(raw: str) -> tuple[str, dict]:
-    """Return (reply, updates) from the model's JSON output."""
-    # Strip markdown code fences if the model adds them
     text = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
-    # Find the outermost {...}
     start = text.find("{")
     end   = text.rfind("}") + 1
     if start == -1 or end == 0:
@@ -127,9 +130,90 @@ def _parse_response(raw: str) -> tuple[str, dict]:
     updates = obj.get("updates", {})
     if not isinstance(updates, dict):
         updates = {}
-    # Strip disallowed keys
-    updates = {k: v for k, v in updates.items() if k in _ALLOWED_UPDATES}
-    return reply, updates
+    return reply, {k: v for k, v in updates.items() if k in _ALLOWED_UPDATES}
+
+
+# ── Mention resolution ────────────────────────────────────────────────
+
+def _resolve_mention(query: str, rooms: list[dict]) -> Optional[dict]:
+    """Fuzzy-resolve a mention string to a room dict (or None)."""
+    q = query.strip().casefold()
+    # 1. exact ID
+    for r in rooms:
+        if r.get("id", "").casefold() == q:
+            return r
+    # 2. exact name
+    for r in rooms:
+        if r.get("name", "").casefold() == q:
+            return r
+    # 3. name starts with query
+    for r in rooms:
+        if r.get("name", "").casefold().startswith(q):
+            return r
+    # 4. name contains query
+    for r in rooms:
+        if q in r.get("name", "").casefold() or q in r.get("id", "").casefold():
+            return r
+    return None
+
+
+def _room_neighbors(room: dict, all_rooms: list[dict]) -> dict[str, dict]:
+    """
+    Return a dict of {room_id: room_dict} for direct neighbors:
+    rooms this room exits to + rooms that exit into this room.
+    """
+    rid = room.get("id", "")
+    room_index = {r["id"]: r for r in all_rooms}
+    neighbors: dict[str, dict] = {}
+
+    # Forward: rooms this room exits to
+    for target_id in room.get("exits", {}).values():
+        if target_id in room_index and target_id != rid:
+            neighbors[target_id] = room_index[target_id]
+
+    # Backward: rooms that have an exit pointing here
+    for r in all_rooms:
+        if r["id"] != rid and rid in r.get("exits", {}).values():
+            neighbors[r["id"]] = r
+
+    return neighbors
+
+
+def _format_mention_block(mentions: list[tuple[str, dict]], all_rooms: list[dict]) -> str:
+    """Build the REFERENCED ROOMS section for the system prompt."""
+    if not mentions:
+        return ""
+    lines = ["REFERENCED ROOMS (resolved from your <mentions>):"]
+    for query, room in mentions:
+        rid   = room.get("id", "?")
+        name  = room.get("name", rid)
+        desc  = room.get("description", "")[:120]
+        area  = room.get("area", "")
+        exits = room.get("exits", {})
+
+        lines.append(f"\n  <{query}> → \"{name}\" (id: {rid}, area: {area})")
+        if desc:
+            lines.append(f"    Description: {desc}{'…' if len(room.get('description','')) > 120 else ''}")
+        if exits:
+            exit_summary = ", ".join(f"{d}→{t}" for d, t in exits.items())
+            lines.append(f"    Exits: {exit_summary}")
+
+        neighbors = _room_neighbors(room, all_rooms)
+        if neighbors:
+            lines.append("    Neighbors:")
+            for nb in list(neighbors.values())[:4]:
+                nb_desc = nb.get("description", "")[:60]
+                lines.append(f"      {nb['id']}: \"{nb.get('name','')}\" — {nb_desc}")
+
+        # Back-links
+        back = [r for r in all_rooms if rid in r.get("exits", {}).values()
+                and r.get("id") != rid]
+        if back:
+            back_ids = ", ".join(r["id"] for r in back[:4])
+            lines.append(f"    Linked from: {back_ids}")
+
+    lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 # ── RoomAssistPane ────────────────────────────────────────────────────
@@ -138,10 +222,8 @@ class RoomAssistPane(tk.Frame):
     """
     Chat panel mounted beside the Room Editor.
 
-    Caller wires:
-        get_snapshot  -> callable() -> dict  (current form values)
-        apply_updates -> callable(dict)      (write updates back to form)
-        area_rooms    -> callable() -> list  (rooms in same area for context)
+    Type <room name> in a message to pull that room's data and neighbors
+    into the model's context for that exchange.
     """
 
     def __init__(
@@ -151,17 +233,18 @@ class RoomAssistPane(tk.Frame):
         get_snapshot: Callable[[], dict],
         apply_updates: Callable[[dict], None],
         area_rooms: Callable[[], list],
+        all_rooms: Callable[[], list],
     ):
         super().__init__(parent, bg=_BG, highlightthickness=1,
                          highlightbackground=_BORDER)
-        self._get_snapshot   = get_snapshot
-        self._apply_updates  = apply_updates
-        self._area_rooms     = area_rooms
+        self._get_snapshot  = get_snapshot
+        self._apply_updates = apply_updates
+        self._area_rooms    = area_rooms
+        self._all_rooms     = all_rooms
 
-        # Conversation state
-        self._messages: list[dict] = []   # Ollama message dicts (user/assistant)
+        self._messages: list[dict] = []
         self._summary: str = ""
-        self._undo_snapshot: Optional[dict] = None  # form state before last AI apply
+        self._undo_snapshot: Optional[dict] = None
         self._busy = False
 
         self._build()
@@ -169,7 +252,6 @@ class RoomAssistPane(tk.Frame):
     # ── Layout ────────────────────────────────────────────────────────
 
     def _build(self) -> None:
-        # Header
         hdr = tk.Frame(self, bg=_HDR_BG)
         hdr.pack(fill="x")
         tk.Label(hdr, text=" ASSIST ROOM ", bg=_HDR_BG, fg=_FG,
@@ -179,7 +261,6 @@ class RoomAssistPane(tk.Frame):
                   relief="flat", font=("Consolas", 8), cursor="hand2",
                   command=self.reset_chat).pack(side="right", padx=6)
 
-        # History
         self._history = tk.Text(
             self, bg="#000a00", fg=_FG,
             font=("Consolas", 8), relief="flat",
@@ -192,8 +273,8 @@ class RoomAssistPane(tk.Frame):
         self._history.tag_config("assist",  foreground=_FG)
         self._history.tag_config("system",  foreground=_DIM)
         self._history.tag_config("updated", foreground=_WARN)
+        self._history.tag_config("mention", foreground=_MENTION)
 
-        # Prompt entry
         entry_row = tk.Frame(self, bg=_BG)
         entry_row.pack(fill="x", padx=4, pady=4)
         self._prompt_var = tk.StringVar()
@@ -214,7 +295,6 @@ class RoomAssistPane(tk.Frame):
         )
         self._send_btn.pack(side="left")
 
-        # Undo button
         self._undo_btn = tk.Button(
             self, text="Undo Last AI Update", bg=_BG, fg=_DIM,
             activebackground=_HDR_BG, activeforeground=_FG,
@@ -223,13 +303,13 @@ class RoomAssistPane(tk.Frame):
         )
         self._undo_btn.pack(fill="x", padx=4, pady=(0, 4))
 
-        self._append("system", "Chat with the model to modify this room.\n"
-                               "Changes apply to the form only — Save Room to persist.")
+        self._append("system",
+                     "Chat to modify this room.  Mention other rooms with <name>.\n"
+                     "Changes apply to the form only — Save Room to persist.")
 
     # ── Chat state ────────────────────────────────────────────────────
 
     def reset_chat(self) -> None:
-        """Clear conversation history. Does NOT clear form values."""
         self._messages = []
         self._summary  = ""
         self._undo_snapshot = None
@@ -248,32 +328,34 @@ class RoomAssistPane(tk.Frame):
         self._prompt_var.set("")
         self._busy = True
         self._send_btn.configure(state="disabled")
-        self._append("user", prompt)
+        self._append_user_with_mentions(prompt)
         threading.Thread(target=self._worker, args=(prompt,), daemon=True).start()
 
     def _worker(self, prompt: str) -> None:
         try:
-            snapshot  = self._get_snapshot()
-            area_list = self._area_rooms()
+            snapshot   = self._get_snapshot()
+            area_list  = self._area_rooms()
+            all_rooms  = self._all_rooms()
 
-            # Build Ollama messages
-            system_content = self._build_system(snapshot, area_list)
-            messages = [{"role": "system", "content": system_content}]
+            # Resolve mentions in the user's message
+            mentions   = self._extract_mentions(prompt, all_rooms)
+
+            system_msg = self._build_system(snapshot, area_list, all_rooms, mentions)
+            messages   = [{"role": "system", "content": system_msg}]
             messages.extend(self._messages)
             messages.append({"role": "user", "content": prompt})
 
             raw = _ollama_chat(messages)
             reply, updates = _parse_response(raw)
 
-            # Store exchange and roll window
-            self._messages.append({"role": "user",      "content": prompt})
-            self._messages.append({"role": "assistant",  "content": raw})
+            self._messages.append({"role": "user",     "content": prompt})
+            self._messages.append({"role": "assistant","content": raw})
             self._roll_window()
 
             if updates:
                 self.after(0, lambda u=updates, s=deepcopy(snapshot):
                            self._apply_safe(u, s))
-            self.after(0, lambda r=reply: self._on_reply(r, bool(updates)))
+            self.after(0, lambda r=reply, m=mentions: self._on_reply(r, bool(updates), m))
 
         except Exception as exc:
             self.after(0, lambda: self._append("system", f"Error: {exc}"))
@@ -281,8 +363,12 @@ class RoomAssistPane(tk.Frame):
             self._busy = False
             self.after(0, lambda: self._send_btn.configure(state="normal"))
 
-    def _on_reply(self, reply: str, had_updates: bool) -> None:
+    def _on_reply(self, reply: str, had_updates: bool,
+                  mentions: list[tuple[str, dict]]) -> None:
         self._append("assist", reply)
+        if mentions:
+            names = ", ".join(f"<{q}>" for q, _ in mentions)
+            self._append("mention", f"↳ context pulled: {names}")
         if had_updates:
             self._append("updated", "↑ Applied to form. Click Save Room to keep.")
 
@@ -299,12 +385,28 @@ class RoomAssistPane(tk.Frame):
         self._undo_snapshot = None
         self._undo_btn.configure(state="disabled")
 
+    # ── Mention helpers ───────────────────────────────────────────────
+
+    def _extract_mentions(self, text: str,
+                          all_rooms: list[dict]) -> list[tuple[str, dict]]:
+        """Return [(query, room_dict)] for each resolved <mention> in text."""
+        seen: set[str] = set()
+        result = []
+        for m in _MENTION_RE.finditer(text):
+            query = m.group(1).strip()
+            if query.casefold() in seen:
+                continue
+            seen.add(query.casefold())
+            room = _resolve_mention(query, all_rooms)
+            if room:
+                result.append((query, room))
+        return result
+
     # ── Rolling window ────────────────────────────────────────────────
 
     def _roll_window(self) -> None:
-        """Summarise the two oldest exchanges when window overflows."""
         if len(self._messages) > _WINDOW_SIZE * 2:
-            oldest = self._messages[:4]  # 2 exchanges = 4 messages
+            oldest = self._messages[:4]
             self._messages = self._messages[4:]
             try:
                 new_summary = _summarise(oldest)
@@ -314,36 +416,56 @@ class RoomAssistPane(tk.Frame):
 
     # ── Context building ──────────────────────────────────────────────
 
-    def _build_system(self, snapshot: dict, area_rooms: list) -> str:
+    def _build_system(self, snapshot: dict, area_rooms: list,
+                      all_rooms: list, mentions: list[tuple[str, dict]]) -> str:
         room_state = json.dumps({
-            k: snapshot[k] for k in
-            ("id", "name", "area", "description", "environment", "objects")
+            k: snapshot[k]
+            for k in ("id", "name", "area", "description", "environment", "objects")
             if k in snapshot
         }, ensure_ascii=False, indent=2)
 
         nearby_parts = []
         for r in area_rooms[:6]:
-            rid = r.get("id", "")
-            if rid == snapshot.get("id"):
+            if r.get("id") == snapshot.get("id"):
                 continue
-            nearby_parts.append(f"  {rid}: {r.get('name', '')} — {r.get('description', '')[:80]}")
+            nearby_parts.append(
+                f"  {r['id']}: {r.get('name','')} — {r.get('description','')[:80]}"
+            )
         nearby = "\n".join(nearby_parts) or "  (none)"
 
-        summary_block = (f"SUMMARY OF EARLIER CONVERSATION:\n{self._summary}\n\n"
+        mention_block = _format_mention_block(mentions, all_rooms)
+        summary_block = (f"EARLIER CONVERSATION SUMMARY:\n{self._summary}\n\n"
                          if self._summary else "")
 
         return _SYSTEM_PROMPT.format(
             room_state=room_state,
             nearby=nearby,
+            mention_block=mention_block,
             summary_block=summary_block,
         )
 
     # ── History display ───────────────────────────────────────────────
 
     def _append(self, role: str, text: str) -> None:
-        prefix = {"user": "You: ", "assist": "AI:  ", "system": "",
-                  "updated": ""}.get(role, "")
+        prefix = {"user": "You: ", "assist": "AI:  ",
+                  "system": "", "updated": "", "mention": "  "}.get(role, "")
         self._history.configure(state="normal")
         self._history.insert("end", prefix + text + "\n\n", role)
+        self._history.see("end")
+        self._history.configure(state="disabled")
+
+    def _append_user_with_mentions(self, text: str) -> None:
+        """Display user message with <mentions> highlighted in a distinct colour."""
+        self._history.configure(state="normal")
+        self._history.insert("end", "You: ", "user")
+        last = 0
+        for m in _MENTION_RE.finditer(text):
+            if m.start() > last:
+                self._history.insert("end", text[last:m.start()], "user")
+            self._history.insert("end", m.group(0), "mention")
+            last = m.end()
+        if last < len(text):
+            self._history.insert("end", text[last:], "user")
+        self._history.insert("end", "\n\n")
         self._history.see("end")
         self._history.configure(state="disabled")
