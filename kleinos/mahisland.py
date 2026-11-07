@@ -24,15 +24,16 @@ _SAVE_PATH = Path(__file__).resolve().parent.parent / "data" / "mahisland_save.j
 # ── Audio ─────────────────────────────────────────────────────────────
 # (freq_hz, duration_ms) sequences — played async in daemon threads via winsound
 _SFX: dict[str, list[tuple[int, int]]] = {
-    "swing":    [(380, 40)],
-    "hit_mob":  [(650, 55)],
-    "hit_node": [(220, 55)],
-    "damage":   [(160, 90)],
-    "eat":      [(880, 70)],
-    "place":    [(480, 60)],
-    "mob_die":  [(720, 40)],
-    "craft":    [(660, 55), (880, 80)],
-    "death":    [(350, 90), (260, 90), (180, 130)],
+    "swing":     [(380, 40)],
+    "hit_mob":   [(650, 55)],
+    "hit_node":  [(220, 55)],
+    "damage":    [(160, 90)],
+    "eat":       [(880, 70)],
+    "place":     [(480, 60)],
+    "mob_die":   [(720, 40)],
+    "craft":     [(660, 55), (880, 80)],
+    "death":     [(350, 90), (260, 90), (180, 130)],
+    "aim_click": [(700, 12)],
 }
 
 def _sfx(name: str) -> None:
@@ -91,9 +92,13 @@ _NODE_RESPAWN = {N_TREE: 30, N_STONE: 45, N_ORE: 90, N_BUSH: 20}  # seconds
 _NODE_COLOR   = {N_TREE: _MID, N_STONE: _DIM, N_ORE: _BRIGHT, N_BUSH: _MID}
 
 # Swing constants
-SWING_CD   = 1.0        # seconds
+SWING_CD        = 0.35       # seconds between swings
+SWING_FLASH_TTL = 0.07       # swing animation duration (seconds)
 SWING_DMG  = 10         # unarmed / basic
 SWING_RANGE = TILE * 2.2
+
+# 8-way direction snap (radians): E, SE, S, SW, W, NW, N, NE
+_SNAP_ANGLES = [k * math.pi / 4 for k in range(-4, 4)]
 
 # Player base stats
 P_SPEED = 250           # px/s
@@ -332,6 +337,7 @@ class MAHisLANDPane(tk.Canvas):
         self._px = float(cx)
         self._py = float(cy)
         self._angle = 0.0
+        self._prev_snap = 0.0
         self._camx = self._px - getattr(self, "_vw", 540) / 2
         self._camy = self._py - getattr(self, "_vh", 408) / 2
         self._hp = float(P_HP_MAX)
@@ -490,11 +496,17 @@ class MAHisLANDPane(tk.Canvas):
             k.discard("3")
             self._eat_food()
 
-        # Player facing
+        # Player facing — snap to 8 preset directions, click when sector changes
         dx = self._mx - self._px
         dy = self._my - self._py
         if abs(dx) + abs(dy) > 2:
-            self._angle = math.atan2(dy, dx)
+            raw = math.atan2(dy, dx)
+            snap = min(_SNAP_ANGLES,
+                       key=lambda a: abs(math.atan2(math.sin(raw - a), math.cos(raw - a))))
+            if snap != self._prev_snap:
+                self._prev_snap = snap
+                _sfx("aim_click")
+            self._angle = snap
 
         # Movement
         mx = my = 0.0
@@ -626,7 +638,7 @@ class MAHisLANDPane(tk.Canvas):
         # Swing visual: line from player to reach point
         ax = self._px + math.cos(self._angle) * SWING_RANGE
         ay = self._py + math.sin(self._angle) * SWING_RANGE
-        self._swing_flash = (self._px, self._py, ax, ay, 0.18)
+        self._swing_flash = (self._px, self._py, ax, ay, SWING_FLASH_TTL)
 
         # Hit detection: node within range AND within ~70° of aim direction
         best_dist = SWING_RANGE + 1
@@ -724,9 +736,9 @@ class MAHisLANDPane(tk.Canvas):
                     return
 
     def _do_place(self, kind: str) -> None:
-        # Place at the tile the player is facing
-        tx = int((self._px + math.cos(self._angle) * TILE * 1.5) // TILE)
-        ty = int((self._py + math.sin(self._angle) * TILE * 1.5) // TILE)
+        # Place at the tile under the mouse cursor
+        tx = int(self._mx // TILE)
+        ty = int(self._my // TILE)
 
         if tx <= 0 or ty <= 0 or tx >= W_TILES - 1 or ty >= H_TILES - 1:
             self._flash_msg("Can't place there")
@@ -1243,7 +1255,7 @@ class MAHisLANDPane(tk.Canvas):
         # Swing flash: line from player to tip
         if self._swing_flash:
             ox, oy, ax, ay, ttl = self._swing_flash
-            frac = max(0.0, ttl / 0.18)
+            frac = max(0.0, ttl / SWING_FLASH_TTL)
             # interpolate tip towards player as it fades
             tip_x = ox + (ax - ox) * frac
             tip_y = oy + (ay - oy) * frac
