@@ -45,6 +45,20 @@ _DEFAULTS: dict = {
 }
 
 
+# ── Font scaling ─────────────────────────────────────────────────────
+_FONT_SCALE: float = 1.0
+
+
+def set_font_scale(factor: float) -> None:
+    global _FONT_SCALE
+    _FONT_SCALE = max(0.5, float(factor))
+
+
+def font_pt(n: int) -> int:
+    """DPI-aware font size. Use in font tuples instead of a literal int."""
+    return max(6, int(n * _FONT_SCALE))
+
+
 def _merge(target: dict, defaults: dict) -> None:
     """Recursively add missing keys from defaults into target."""
     for k, v in defaults.items():

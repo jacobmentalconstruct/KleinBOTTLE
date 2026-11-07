@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 import tkinter as tk
 from pathlib import Path
 from typing import Callable, Optional
@@ -81,9 +82,9 @@ class SpaceInvadersPane(tk.Canvas):
         self.H        = int(408 * s)
         self.H_GAP    = int(44 * s)
         self.V_GAP    = int(36 * s)
-        # Speeds (px/tick)
-        self._player_spd  = max(2, int(5 * s))
-        self._bomb_spd    = max(2, int(5 * s))
+        # Speeds (px/s)
+        self._player_spd  = max(50, int(125 * s))
+        self._bomb_spd    = max(50, int(125 * s))
         self._hit_margin  = max(8, int(14 * s))
         self._inv_step    = max(2, int(10 * s))
         # Fonts
@@ -109,6 +110,7 @@ class SpaceInvadersPane(tk.Canvas):
         self.bind("<Escape>",     lambda _: self._on_escape())
         self.bind("<Button-1>",   self._on_click)
         self._tick_id: Optional[str] = None
+        self._last_t: float = 0.0
         self._loop()
 
     # ── Sprite drawing ───────────────────────────────────────────────
@@ -135,11 +137,11 @@ class SpaceInvadersPane(tk.Canvas):
         self._py = self.H - int(36 * s)
         self._score = 0
         self._lives = 3
-        self._frame = 0
+        self._frame = 0.0  # virtual frame counter (dt * 25) for animation
 
         self._base_speed  = base_speed
         self._bomb_chance = bomb_chance
-        self._bullet_speed = max(int(11 * s), int((40 - base_speed) * s))
+        self._bullet_speed = max(int(275 * s), int((40 - base_speed) * 25 * s))  # px/s
 
         self._invaders: list[list] = [
             [c, r, True] for r in range(self.ROWS) for c in range(self.COLS)
@@ -148,14 +150,14 @@ class SpaceInvadersPane(tk.Canvas):
         self._gy = int(48 * s)
         self._gdx = 1
         self._step_down = False
-        self._inv_timer = 0
+        self._inv_timer = 0.0  # seconds
 
         self._bullets: list[list[float]] = []
         self._bombs: list[list[float]] = []
         self._explosions: list[list] = []
 
-        self._fire_cd = 0
-        self._invincible = 0
+        self._fire_cd = 0.0  # seconds
+        self._invincible = 0.0  # seconds
         self._new_high_score = False
         self._keys: set[str] = set()
         self._state = "title"   # title | start | play | quit_confirm | dead | won
@@ -163,7 +165,10 @@ class SpaceInvadersPane(tk.Canvas):
     # ── Main loop ────────────────────────────────────────────────────
 
     def _loop(self) -> None:
-        self._update()
+        now = time.monotonic()
+        dt = min(now - self._last_t, 0.1) if self._last_t > 0 else 0.04
+        self._last_t = now
+        self._update(dt)
         self._draw()
         self._tick_id = self.after(40, self._loop)
 
@@ -235,8 +240,8 @@ class SpaceInvadersPane(tk.Canvas):
 
     # ── Update ───────────────────────────────────────────────────────
 
-    def _update(self) -> None:
-        self._frame += 1
+    def _update(self, dt: float) -> None:
+        self._frame += dt * 25  # advance virtual frames at 25fps for animation
 
         if self._state == "title":
             if self._keys - {"Escape"}:
@@ -275,21 +280,21 @@ class SpaceInvadersPane(tk.Canvas):
             return
 
         if self._invincible > 0:
-            self._invincible -= 1
+            self._invincible = max(0.0, self._invincible - dt)
 
         # Player movement
         margin = self._spr_w // 2
         if "Left" in self._keys or "a" in self._keys:
-            self._px = max(margin, self._px - self._player_spd)
+            self._px = max(margin, self._px - self._player_spd * dt)
         if "Right" in self._keys or "d" in self._keys:
-            self._px = min(self.W - margin, self._px + self._player_spd)
+            self._px = min(self.W - margin, self._px + self._player_spd * dt)
 
         # Fire
         if self._fire_cd > 0:
-            self._fire_cd -= 1
-        if "space" in self._keys and self._fire_cd == 0:
+            self._fire_cd = max(0.0, self._fire_cd - dt)
+        if "space" in self._keys and self._fire_cd <= 0:
             self._bullets.append([float(self._px), float(self._py - self._spr_h // 2)])
-            self._fire_cd = 15
+            self._fire_cd = 0.6  # seconds (was 15 frames at 25fps)
             audio.shoot()
 
         # Bullet ↔ invader collision
@@ -305,18 +310,18 @@ class SpaceInvadersPane(tk.Canvas):
                     if bullet in self._bullets:
                         self._bullets.remove(bullet)
                     self._score += 10
-                    self._explosions.append([ix, iy, 8])
+                    self._explosions.append([ix, iy, 0.32])  # 8 frames at 25fps
                     audio.hit()
                     break
 
         # Move player bullets
-        self._bullets = [[x, y - self._bullet_speed] for x, y in self._bullets if y > 0]
+        self._bullets = [[x, y - self._bullet_speed * dt] for x, y in self._bullets if y > 0]
 
         # Move invader bombs
-        self._bombs = [[x, y + self._bomb_spd] for x, y in self._bombs if y < self.H]
+        self._bombs = [[x, y + self._bomb_spd * dt] for x, y in self._bombs if y < self.H]
 
         # Tick explosions
-        self._explosions = [[x, y, t - 1] for x, y, t in self._explosions if t > 1]
+        self._explosions = [[x, y, t - dt] for x, y, t in self._explosions if t > 0]
 
         # Move invader grid
         alive = [inv for inv in self._invaders if inv[2]]
@@ -326,8 +331,8 @@ class SpaceInvadersPane(tk.Canvas):
             return
 
         speed = max(2, self._base_speed - len(alive) // 3)
-        self._inv_timer += 1
-        if self._inv_timer >= speed:
+        self._inv_timer += dt
+        if self._inv_timer >= speed * 0.04:  # speed threshold in seconds (frames * 0.04)
             self._inv_timer = 0
             audio.tick(len(alive))
             if self._step_down:
@@ -352,10 +357,10 @@ class SpaceInvadersPane(tk.Canvas):
         hm = self._hit_margin
         for bomb in self._bombs[:]:
             bx, by = bomb
-            if self._invincible == 0 and abs(bx - self._px) < hm and abs(by - self._py) < hm:
+            if self._invincible <= 0 and abs(bx - self._px) < hm and abs(by - self._py) < hm:
                 self._bombs.remove(bomb)
                 self._lives -= 1
-                self._explosions.append([self._px, self._py, 12])
+                self._explosions.append([self._px, self._py, 0.48])  # 12 frames at 25fps
                 self._px = self.W // 2
                 self._bullets.clear()
                 if self._lives <= 0:
@@ -363,7 +368,7 @@ class SpaceInvadersPane(tk.Canvas):
                     self._check_high_score()
                     audio.death()
                 else:
-                    self._invincible = 60
+                    self._invincible = 2.4  # seconds (was 60 frames at 25fps)
                     audio.player_hit()
 
         # Game over when invader bottom reaches the player's gun line
@@ -427,10 +432,10 @@ class SpaceInvadersPane(tk.Canvas):
         if self._state != "dead" or self._frame % 6 < 4:
             self._draw_sprite(_PLAYER, int(self._px), int(self._py), _GH)
 
-        # Explosions
+        # Explosions (t is seconds remaining; convert back to virtual frames for radius)
         for ex, ey, t in self._explosions:
-            r = (self._s * 4) - t
-            color = _GH if t > 5 else _G
+            r = max(0, (self._s * 4) - int(t * 25))
+            color = _GH if t > 0.2 else _G  # was t > 5 frames at 25fps
             ep = max(1, self._s)
             for _ in range(6):
                 px = ex + r * (0.5 - random.random()) * 2

@@ -305,6 +305,11 @@ class MAHisLANDPane(tk.Canvas):
         self._vh = self.winfo_height() or 408
         self.bind("<Configure>", self._on_resize)
 
+        # Scale-derived tile size and physics constants (future: set from scale param)
+        self._tile: int = TILE
+        self._swing_range: float = SWING_RANGE
+        self._mob_sight: float = MOB_SIGHT
+
         # Input (persists across resets)
         self._keys: set[str] = set()
         self._mx = 0.0
@@ -334,8 +339,8 @@ class MAHisLANDPane(tk.Canvas):
 
     def _reset_world(self) -> None:
         self._grid, self._nodes = _gen_world()
-        cx = (W_TILES // 2) * TILE + TILE // 2
-        cy = (H_TILES // 2) * TILE + TILE // 2
+        cx = (W_TILES // 2) * self._tile + self._tile // 2
+        cy = (H_TILES // 2) * self._tile + self._tile // 2
         self._px = float(cx)
         self._py = float(cy)
         self._angle = 0.0
@@ -602,13 +607,13 @@ class MAHisLANDPane(tk.Canvas):
             self._msg_ttl -= dt
 
     def _passable(self, wx: float, wy: float) -> bool:
-        r = TILE * 0.35
+        r = self._tile * 0.35
         for ox, oy in [(-r, -r), (r, -r), (-r, r), (r, r)]:
             t = self._tile_at(wx + ox, wy + oy)
             if t == T_WALL:
                 return False
-            tx = int((wx + ox) // TILE)
-            ty = int((wy + oy) // TILE)
+            tx = int((wx + ox) // self._tile)
+            ty = int((wy + oy) // self._tile)
             # Solid structures
             for s in self._structs:
                 if s["tx"] == tx and s["ty"] == ty:
@@ -623,8 +628,8 @@ class MAHisLANDPane(tk.Canvas):
         return True
 
     def _tile_at(self, wx: float, wy: float) -> int:
-        tx = int(wx // TILE)
-        ty = int(wy // TILE)
+        tx = int(wx // self._tile)
+        ty = int(wy // self._tile)
         if tx < 0 or ty < 0 or tx >= W_TILES or ty >= H_TILES:
             return T_WALL
         return self._grid[ty][tx]
@@ -639,20 +644,20 @@ class MAHisLANDPane(tk.Canvas):
         dmg = 25 if "gather_tool" in self._gear else SWING_DMG
 
         # Swing visual: line from player to reach point
-        ax = self._px + math.cos(self._angle) * SWING_RANGE
-        ay = self._py + math.sin(self._angle) * SWING_RANGE
+        ax = self._px + math.cos(self._angle) * self._swing_range
+        ay = self._py + math.sin(self._angle) * self._swing_range
         self._swing_flash = (self._px, self._py, ax, ay, SWING_FLASH_TTL)
 
         # Hit detection: node within range AND within ~70° of aim direction
-        best_dist = SWING_RANGE + 1
+        best_dist = self._swing_range + 1
         best_node = None
         for node in self._nodes:
             if node["hp"] <= 0:
                 continue
-            nx = node["tx"] * TILE + TILE / 2
-            ny = node["ty"] * TILE + TILE / 2
+            nx = node["tx"] * self._tile + self._tile / 2
+            ny = node["ty"] * self._tile + self._tile / 2
             dist = math.hypot(nx - self._px, ny - self._py)
-            if dist > SWING_RANGE:
+            if dist > self._swing_range:
                 continue
             node_angle = math.atan2(ny - self._py, nx - self._px)
             diff = abs(math.atan2(math.sin(node_angle - self._angle),
@@ -667,7 +672,7 @@ class MAHisLANDPane(tk.Canvas):
         combat_dmg = 30 if "weapon" in self._gear else SWING_DMG
         for mob in self._mobs:
             mdist = math.hypot(mob["x"] - self._px, mob["y"] - self._py)
-            if mdist > SWING_RANGE:
+            if mdist > self._swing_range:
                 continue
             mob_angle = math.atan2(mob["y"] - self._py, mob["x"] - self._px)
             diff = abs(math.atan2(math.sin(mob_angle - self._angle),
@@ -695,9 +700,9 @@ class MAHisLANDPane(tk.Canvas):
     def _do_interact(self) -> None:
         # Find nearest structure within range
         for s in self._structs:
-            sx = s["tx"] * TILE + TILE / 2
-            sy = s["ty"] * TILE + TILE / 2
-            if math.hypot(sx - self._px, sy - self._py) < TILE * 2:
+            sx = s["tx"] * self._tile + self._tile / 2
+            sy = s["ty"] * self._tile + self._tile / 2
+            if math.hypot(sx - self._px, sy - self._py) < self._tile * 2:
                 if s["kind"] == "gate":
                     s["open"] = not s.get("open", False)
                     self._flash_msg("Gate " + ("opened" if s["open"] else "closed"))
@@ -739,9 +744,9 @@ class MAHisLANDPane(tk.Canvas):
                     return
 
     def _do_place(self, kind: str) -> None:
-        # Place exactly one tile out from the player in the facing direction
-        tx = int(self._px // TILE) + round(math.cos(self._angle))
-        ty = int(self._py // TILE) + round(math.sin(self._angle))
+        # Place exactly one self._tile out from the player in the facing direction
+        tx = int(self._px // self._tile) + round(math.cos(self._angle))
+        ty = int(self._py // self._tile) + round(math.sin(self._angle))
 
         if tx <= 0 or ty <= 0 or tx >= W_TILES - 1 or ty >= H_TILES - 1:
             self._flash_msg("Can't place there")
@@ -758,7 +763,7 @@ class MAHisLANDPane(tk.Canvas):
         # Check occupied
         for s in self._structs:
             if s["tx"] == tx and s["ty"] == ty:
-                self._flash_msg("Tile occupied")
+                self._flash_msg("self._tile occupied")
                 return
 
         recipe, hp = _STRUCTURES[kind]
@@ -785,9 +790,9 @@ class MAHisLANDPane(tk.Canvas):
             need_bench = True
             for s in self._structs:
                 if s["kind"] == "bench":
-                    sx = s["tx"] * TILE + TILE / 2
-                    sy = s["ty"] * TILE + TILE / 2
-                    if math.hypot(sx - self._px, sy - self._py) < TILE * 3:
+                    sx = s["tx"] * self._tile + self._tile / 2
+                    sy = s["ty"] * self._tile + self._tile / 2
+                    if math.hypot(sx - self._px, sy - self._py) < self._tile * 3:
                         need_bench = False
                         break
             if need_bench:
@@ -872,11 +877,11 @@ class MAHisLANDPane(tk.Canvas):
         dist = math.hypot(dx, dy)
         if dist == 0:
             return True
-        steps = max(2, int(dist / (TILE * 0.6)))
+        steps = max(2, int(dist / (self._tile * 0.6)))
         for i in range(1, steps):
             t = i / steps
-            cx = int((x1 + dx * t) // TILE)
-            cy = int((y1 + dy * t) // TILE)
+            cx = int((x1 + dx * t) // self._tile)
+            cy = int((y1 + dy * t) // self._tile)
             if cx < 0 or cy < 0 or cx >= W_TILES or cy >= H_TILES:
                 return False
             if self._grid[cy][cx] == T_WALL:
@@ -911,15 +916,15 @@ class MAHisLANDPane(tk.Canvas):
         if kind is None:
             return
 
-        # Pick a random unclaimed tile away from player
+        # Pick a random unclaimed self._tile away from player
         for _ in range(30):
             tx = random.randint(1, W_TILES - 2)
             ty = random.randint(1, H_TILES - 2)
             if self._grid[ty][tx] == T_WALL:
                 continue
-            wx = tx * TILE + TILE / 2
-            wy = ty * TILE + TILE / 2
-            if math.hypot(wx - self._px, wy - self._py) < TILE * 12:
+            wx = tx * self._tile + self._tile / 2
+            wy = ty * self._tile + self._tile / 2
+            if math.hypot(wx - self._px, wy - self._py) < self._tile * 12:
                 continue
             if self._claimed(tx, ty):
                 continue
@@ -948,7 +953,7 @@ class MAHisLANDPane(tk.Canvas):
         dy = self._py - mob["y"]
         dist = math.hypot(dx, dy)
 
-        can_see = dist < MOB_SIGHT and self._has_los(mob["x"], mob["y"], self._px, self._py)
+        can_see = dist < self._mob_sight and self._has_los(mob["x"], mob["y"], self._px, self._py)
 
         if mob["kind"] == "critter":
             if can_see:
@@ -988,7 +993,7 @@ class MAHisLANDPane(tk.Canvas):
                 self._wander_tick(mob, dt)
 
             # Contact damage to player
-            if dist < TILE * 1.2:
+            if dist < self._tile * 1.2:
                 if mob["dmg_cd"] <= 0:
                     dmg = RAIDER_CONTACT_DMG
                     if "tunic" in self._gear:
@@ -1006,9 +1011,9 @@ class MAHisLANDPane(tk.Canvas):
             for s in self._structs:
                 if s["kind"] not in ("wall", "gate", "spike"):
                     continue
-                sx = s["tx"] * TILE + TILE / 2
-                sy = s["ty"] * TILE + TILE / 2
-                if math.hypot(sx - mob["x"], sy - mob["y"]) < TILE * 1.4:
+                sx = s["tx"] * self._tile + self._tile / 2
+                sy = s["ty"] * self._tile + self._tile / 2
+                if math.hypot(sx - mob["x"], sy - mob["y"]) < self._tile * 1.4:
                     s["hp"] -= RAIDER_WALL_DMG * dt
             self._structs = [s for s in self._structs if s["hp"] > 0]
 
@@ -1025,8 +1030,8 @@ class MAHisLANDPane(tk.Canvas):
             mob["vy"] *= -1
 
         # Clamp to world
-        mob["x"] = max(TILE, min(mob["x"], (W_TILES - 1) * TILE))
-        mob["y"] = max(TILE, min(mob["y"], (H_TILES - 1) * TILE))
+        mob["x"] = max(self._tile, min(mob["x"], (W_TILES - 1) * self._tile))
+        mob["y"] = max(self._tile, min(mob["y"], (H_TILES - 1) * self._tile))
 
     def _wander_tick(self, mob: dict, dt: float) -> None:
         mob["state_t"] -= dt
@@ -1152,23 +1157,23 @@ class MAHisLANDPane(tk.Canvas):
             self._draw_confirm_exit()
 
     def _draw_world(self) -> None:
-        # Visible tile range
-        tx0 = max(0, int(self._camx // TILE))
-        ty0 = max(0, int(self._camy // TILE))
-        tx1 = min(W_TILES, tx0 + self._vw // TILE + 2)
-        ty1 = min(H_TILES, ty0 + self._vh // TILE + 2)
+        # Visible self._tile range
+        tx0 = max(0, int(self._camx // self._tile))
+        ty0 = max(0, int(self._camy // self._tile))
+        tx1 = min(W_TILES, tx0 + self._vw // self._tile + 2)
+        ty1 = min(H_TILES, ty0 + self._vh // self._tile + 2)
 
         for ty in range(ty0, ty1):
             for tx in range(tx0, tx1):
                 ter = self._grid[ty][tx]
-                sx = tx * TILE - self._camx
-                sy = ty * TILE - self._camy
+                sx = tx * self._tile - self._camx
+                sy = ty * self._tile - self._camy
                 cl = self._claimed(tx, ty)
                 bg = _TC[ter]
                 if cl:
                     # Slightly brighten claimed tiles
                     bg = _TC_BORDER[ter]
-                self.create_rectangle(sx, sy, sx + TILE - 1, sy + TILE - 1,
+                self.create_rectangle(sx, sy, sx + self._tile - 1, sy + self._tile - 1,
                                       fill=bg, outline="")
 
         # Claim zone border — bright edge on claimed tiles that border unclaimed
@@ -1189,65 +1194,65 @@ class MAHisLANDPane(tk.Canvas):
                     )
                     if not is_edge:
                         continue
-                    ex = tx * TILE - self._camx
-                    ey = ty * TILE - self._camy
-                    if -TILE < ex < self._vw + TILE and -TILE < ey < self._vh + TILE:
-                        self.create_rectangle(ex, ey, ex + TILE - 1, ey + TILE - 1,
+                    ex = tx * self._tile - self._camx
+                    ey = ty * self._tile - self._camy
+                    if -self._tile < ex < self._vw + self._tile and -self._tile < ey < self._vh + self._tile:
+                        self.create_rectangle(ex, ey, ex + self._tile - 1, ey + self._tile - 1,
                                               outline=_MID, fill="", width=1)
 
         # Nodes
         for node in self._nodes:
             if node["hp"] <= 0:
                 continue
-            sx = node["tx"] * TILE - self._camx
-            sy = node["ty"] * TILE - self._camy
-            if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
+            sx = node["tx"] * self._tile - self._camx
+            sy = node["ty"] * self._tile - self._camy
+            if -self._tile < sx < self._vw + self._tile and -self._tile < sy < self._vh + self._tile:
                 col = _NODE_COLOR[node["kind"]]
                 hp_frac = node["hp"] / node["max_hp"]
-                size = TILE * (0.85 + 0.15 * hp_frac)
+                size = self._tile * (0.85 + 0.15 * hp_frac)
                 draw = _SHAPES.get(node["kind"])
                 if draw:
-                    draw(self, sx + TILE/2, sy + TILE/2, size, col)  # type: ignore[call-arg]
+                    draw(self, sx + self._tile/2, sy + self._tile/2, size, col)  # type: ignore[call-arg]
 
         # Structures
         for s in self._structs:
-            sx = s["tx"] * TILE - self._camx
-            sy = s["ty"] * TILE - self._camy
-            if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
+            sx = s["tx"] * self._tile - self._camx
+            sy = s["ty"] * self._tile - self._camy
+            if -self._tile < sx < self._vw + self._tile and -self._tile < sy < self._vh + self._tile:
                 col = _STRUCT_COLOR.get(s["kind"], _MID)
                 hp_frac = s["hp"] / s["max_hp"]
-                pad = int(TILE * 0.1 + TILE * 0.15 * (1 - hp_frac))
+                pad = int(self._tile * 0.1 + self._tile * 0.15 * (1 - hp_frac))
                 if s["kind"] == "gate" and s.get("open", False):
                     self.create_rectangle(sx + pad, sy + pad,
-                                          sx + TILE - pad - 1, sy + TILE - pad - 1,
+                                          sx + self._tile - pad - 1, sy + self._tile - pad - 1,
                                           fill="", outline=col, width=2)
                 else:
                     self.create_rectangle(sx + pad, sy + pad,
-                                          sx + TILE - pad - 1, sy + TILE - pad - 1,
+                                          sx + self._tile - pad - 1, sy + self._tile - pad - 1,
                                           fill=col, outline=_BORDER if s["kind"] == "hearth" else "")
                 if s["kind"] == "hearth":
                     fuel = s.get("fuel", 0)
-                    self.create_text(sx + TILE // 2, sy + TILE // 2,
+                    self.create_text(sx + self._tile // 2, sy + self._tile // 2,
                                      text=str(fuel), fill=_HUD, font=("Consolas", 7))
                 elif s["kind"] == "crate":
                     total = sum(s.get("store", {}).values())
                     if total:
-                        self.create_text(sx + TILE // 2, sy + TILE // 2,
+                        self.create_text(sx + self._tile // 2, sy + self._tile // 2,
                                          text=str(total), fill=_HUD, font=("Consolas", 7))
 
         # Mobs
         for mob in self._mobs:
             sx = mob["x"] - self._camx
             sy = mob["y"] - self._camy
-            if -TILE < sx < self._vw + TILE and -TILE < sy < self._vh + TILE:
+            if -self._tile < sx < self._vw + self._tile and -self._tile < sy < self._vh + self._tile:
                 col = _MID if mob["kind"] == "critter" else _BRIGHT
                 draw = _SHAPES.get(mob["kind"])
                 if draw:
-                    draw(self, sx, sy, TILE, col)  # type: ignore[call-arg]
+                    draw(self, sx, sy, self._tile, col)  # type: ignore[call-arg]
                 # HP bar above mob
-                bw = int(TILE * 0.8)
+                bw = int(self._tile * 0.8)
                 hp_f = mob["hp"] / mob["max_hp"]
-                bar_top = sy - TILE * 0.55
+                bar_top = sy - self._tile * 0.55
                 self.create_rectangle(sx - bw//2, bar_top - 4,
                                       sx + bw//2, bar_top,
                                       fill=_BG, outline="")
@@ -1268,7 +1273,7 @@ class MAHisLANDPane(tk.Canvas):
             sy_t = tip_y - self._camy
             w = max(1, int(3 * frac))
             self.create_line(sx_p, sy_p, sx_t, sy_t, fill=_BRIGHT, width=w)
-            r = int(TILE * 0.25 * frac)
+            r = int(self._tile * 0.25 * frac)
             if r > 0:
                 self.create_oval(sx_t - r, sy_t - r, sx_t + r, sy_t + r,
                                  outline=_BRIGHT, fill="", width=1)
@@ -1277,9 +1282,9 @@ class MAHisLANDPane(tk.Canvas):
         sx = self._px - self._camx
         sy = self._py - self._camy
         col = _BRIGHT if "tunic" in self._gear else _MID
-        _shape_player(self, sx, sy, TILE, col)
+        _shape_player(self, sx, sy, self._tile, col)
         # Direction indicator
-        r = TILE * 0.38
+        r = self._tile * 0.38
         ex = sx + math.cos(self._angle) * r * 1.7
         ey = sy + math.sin(self._angle) * r * 1.7
         self.create_line(sx, sy, ex, ey, fill=_BRIGHT, width=2)
@@ -1291,8 +1296,8 @@ class MAHisLANDPane(tk.Canvas):
         # Hunger bar
         self._bar(8, 22, bw, 8, self._hunger / P_HN_MAX, _MID, "HN")
         # Claimed indicator
-        ptx = int(self._px // TILE)
-        pty = int(self._py // TILE)
+        ptx = int(self._px // self._tile)
+        pty = int(self._py // self._tile)
         zone = "CLAIMED" if self._claimed(ptx, pty) else "WILD"
         self.create_text(8, 38, anchor="nw", text=zone, fill=_HUD, font=("Consolas", 7))
         self.create_text(8, 52, anchor="nw",
