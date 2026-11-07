@@ -437,7 +437,8 @@ class KleinPC:
             w.destroy()
         widget = factory()
         widget.pack(fill="both", expand=True)
-        self._window.after(50, lambda: self._focus_first_input(widget))
+        _after_widget = self._window if self._window is not None else self._content
+        _after_widget.after(50, lambda: self._focus_first_input(widget))
 
     @staticmethod
     def _focus_first_input(parent: tk.Widget) -> None:
