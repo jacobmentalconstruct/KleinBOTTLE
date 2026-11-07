@@ -1,322 +1,321 @@
-"""Workspace Manager pane — custom Tkinter UI for KleinPC."""
+"""Native KleinOS surface for ProjectMapper — folder picker + AdapterSession actions."""
 from __future__ import annotations
 
+import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, scrolledtext
-from typing import Callable, Optional
+from tkinter import filedialog
+from typing import Callable
 
 from kleinos.palette import (
-    BG as _BG, BG2 as _BG2, CHROME as _CHROME, BORDER as _BORDER,
-    BTN_BG as _BTN_BG, BTN_ACT as _BTN_ACT,
-    FG as _FG, FG_ON as _FG_ON, FG_DIM as _FG_DIM,
+    BG, BG2, BTN_ACT, BTN_BG, FG, FG_DIM, FG_HI, FG_ON, SEP, WARN,
 )
-from kleinos.workspace_manager.workspace import (
-    WorkspaceDef, WorkspaceStore, log_event,
-    validate_new_workspace, default_parent, new_workspace,
+from kleinos.workspace_manager.installer import has_sidecar
+from kleinos.workspace_manager.session_bridge import (
+    PMBridge, _format_outcome, _format_scan,
 )
-from kleinos.workspace_manager.installer import install as _install, launch as _launch
-from kleinos.workspace_manager.process_registry import ProcessRegistry
 
-_FONT    = ("Consolas", 9)
-_FONT_HD = ("Consolas", 10, "bold")
-_FONT_SM = ("Consolas", 8)
-_POLL_MS = 2000
+_PROJECTIONS = ("tree", "filedump", "combined", "manifest")
 
 
-class WorkspacePane(tk.Frame):
-    """Full-content-area UI for the Workspace Manager."""
+class ProjectContextPane(tk.Frame):
+    """KleinOS pane that opens a project folder and calls ProjectMapper actions."""
 
     def __init__(
         self,
         parent: tk.Widget,
         *,
-        on_exit: Optional[Callable[[], None]] = None,
+        bridge: PMBridge,
+        on_exit: Callable[[], None],
     ) -> None:
-        super().__init__(parent, bg=_BG, bd=0, highlightthickness=0)
+        super().__init__(parent, bg=BG)
+        self._bridge = bridge
         self._on_exit = on_exit
-        self._store = WorkspaceStore()
-        self._registry = ProcessRegistry()
-        self._workspaces: list[WorkspaceDef] = []
-        self._selected_ws: Optional[WorkspaceDef] = None
-        self._installing = False
+        self._busy = False
         self._build()
-        self._refresh_list()
-        self._poll()
+        self._refresh_ui()
 
     # ── Layout ─────────────────────────────────────────────────────────
 
     def _build(self) -> None:
-        # Header bar
-        hdr = tk.Frame(self, bg=_CHROME)
-        hdr.pack(fill="x")
+        # ── Folder picker ──
+        top = tk.Frame(self, bg=BG, pady=4)
+        top.pack(fill="x", padx=8)
+
         tk.Label(
-            hdr, text="Workspace Manager",
-            bg=_CHROME, fg=_FG_ON, font=_FONT_HD, pady=5, padx=10, anchor="w",
+            top, text="Folder:", bg=BG, fg=FG_DIM, font=("Consolas", 9),
         ).pack(side="left")
-        if self._on_exit:
-            tk.Button(
-                hdr, text="✕", command=self._on_exit,
-                bg=_CHROME, fg=_FG_DIM,
-                activebackground=_BTN_ACT, activeforeground=_FG_ON,
-                font=_FONT_SM, relief="flat", bd=0, cursor="hand2", padx=8,
-            ).pack(side="right")
 
-        # Two-column body
-        body = tk.Frame(self, bg=_BG)
-        body.pack(fill="both", expand=True, padx=8, pady=6)
+        self._folder_var = tk.StringVar()
+        self._folder_entry = tk.Entry(
+            top, textvariable=self._folder_var,
+            bg=BG2, fg=FG, insertbackground=FG,
+            relief="flat", font=("Consolas", 9),
+        )
+        self._folder_entry.pack(side="left", fill="x", expand=True, padx=(4, 4))
+        self._folder_entry.bind("<Return>", lambda _: self._on_folder_confirm())
 
-        left = tk.Frame(body, bg=_BG)
-        left.pack(side="left", fill="both", expand=True)
+        self._browse_btn = tk.Button(
+            top, text="Browse",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=6,
+            command=self._browse,
+        )
+        self._browse_btn.pack(side="left")
 
-        tk.Frame(body, bg=_BORDER, width=1).pack(side="left", fill="y", padx=6)
+        self._open_btn = tk.Button(
+            top, text="Open",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=6,
+            command=self._on_folder_confirm,
+        )
+        self._open_btn.pack(side="left", padx=(4, 0))
 
-        right = tk.Frame(body, bg=_BG)
-        right.pack(side="left", fill="both", expand=True)
+        tk.Frame(self, bg=SEP, height=1).pack(fill="x")
 
-        self._build_create_form(left)
-        tk.Frame(left, bg=_BORDER, height=1).pack(fill="x", pady=6)
-        self._build_ws_list(left)
-        self._build_log(right)
-
-        # Status bar
-        self._status_var = tk.StringVar(value="Ready.")
-        tk.Label(
+        # ── Status label ──
+        self._status_var = tk.StringVar(value="No folder selected.")
+        self._status_lbl = tk.Label(
             self, textvariable=self._status_var,
-            bg=_BG2, fg=_FG_DIM, font=_FONT_SM, anchor="w", padx=8,
+            bg=BG, fg=FG_DIM, font=("Consolas", 9), anchor="w",
+            padx=10, pady=4,
+        )
+        self._status_lbl.pack(fill="x")
+
+        # ── Action buttons (scan / compile / export) ──
+        self._action_frame = tk.Frame(self, bg=BG, pady=4)
+        # pack/pack_forget toggled by _refresh_ui
+
+        self._scan_btn = tk.Button(
+            self._action_frame, text="Scan",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=8,
+            command=lambda: self._run_action("scan"),
+        )
+        self._scan_btn.pack(side="left", padx=(0, 4))
+
+        self._compile_btn = tk.Button(
+            self._action_frame, text="Compile",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=8,
+            command=lambda: self._run_action("compile"),
+        )
+        self._compile_btn.pack(side="left", padx=(0, 4))
+
+        self._proj_var = tk.StringVar(value="combined")
+        proj_menu = tk.OptionMenu(self._action_frame, self._proj_var, *_PROJECTIONS)
+        proj_menu.config(
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=4, pady=0,
+            highlightthickness=0, bd=0,
+        )
+        proj_menu["menu"].config(
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            font=("Consolas", 9),
+        )
+        proj_menu.pack(side="left")
+
+        self._export_btn = tk.Button(
+            self._action_frame, text="Export",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=8,
+            command=lambda: self._run_action("export"),
+        )
+        self._export_btn.pack(side="left", padx=(4, 0))
+
+        # ── Install strip (shown when folder set but no sidecar) ──
+        self._install_frame = tk.Frame(self, bg=BG, pady=4)
+        # pack/pack_forget toggled by _refresh_ui
+
+        tk.Label(
+            self._install_frame,
+            text="No .project-mapper sidecar found.",
+            bg=BG, fg=WARN, font=("Consolas", 9),
+        ).pack(side="left", padx=(0, 8))
+
+        self._install_btn = tk.Button(
+            self._install_frame, text="Install ProjectMapper",
+            bg=BTN_BG, fg=FG, activebackground=BTN_ACT,
+            relief="flat", font=("Consolas", 9), padx=8,
+            command=self._install,
+        )
+        self._install_btn.pack(side="left")
+
+        tk.Frame(self, bg=SEP, height=1).pack(fill="x")
+
+        # ── Scrolled output ──
+        out_frame = tk.Frame(self, bg=BG)
+        out_frame.pack(fill="both", expand=True)
+
+        self._output = tk.Text(
+            out_frame,
+            bg=BG2, fg=FG, insertbackground=FG,
+            font=("Consolas", 9), relief="flat",
+            state="disabled", wrap="none",
+        )
+        vsb = tk.Scrollbar(
+            out_frame, command=self._output.yview,
+            bg=BG2, troughcolor=BG, activebackground=FG_DIM,
+            relief="flat", width=10,
+        )
+        self._output.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self._output.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=4)
+
+        self._output.tag_configure("dim",  foreground=FG_DIM)
+        self._output.tag_configure("warn", foreground=WARN)
+        self._output.tag_configure("hi",   foreground=FG_HI)
+        self._output.tag_configure("ok",   foreground=FG_ON)
+
+        # ── Status bar ──
+        tk.Frame(self, bg=SEP, height=1).pack(fill="x")
+        self._bar_var = tk.StringVar(value="Ready.")
+        tk.Label(
+            self, textvariable=self._bar_var,
+            bg=BG, fg=FG_DIM, font=("Consolas", 8), anchor="w",
+            padx=8, pady=3,
         ).pack(fill="x", side="bottom")
 
-    def _build_create_form(self, parent: tk.Widget) -> None:
-        tk.Label(
-            parent, text="Create Workspace",
-            bg=_BG, fg=_FG_ON, font=_FONT_HD, anchor="w",
-        ).pack(fill="x")
+    # ── State helpers ──────────────────────────────────────────────────
 
-        row1 = tk.Frame(parent, bg=_BG)
-        row1.pack(fill="x", pady=2)
-        tk.Label(row1, text="Name:", bg=_BG, fg=_FG, font=_FONT, width=8, anchor="w").pack(side="left")
-        self._name_var = tk.StringVar()
-        tk.Entry(
-            row1, textvariable=self._name_var,
-            bg=_BTN_BG, fg=_FG_ON, insertbackground=_FG_ON,
-            font=_FONT, relief="flat", bd=1,
-            highlightthickness=1, highlightcolor=_BORDER, highlightbackground=_BORDER,
-        ).pack(side="left", fill="x", expand=True)
-
-        row2 = tk.Frame(parent, bg=_BG)
-        row2.pack(fill="x", pady=2)
-        tk.Label(row2, text="Parent:", bg=_BG, fg=_FG, font=_FONT, width=8, anchor="w").pack(side="left")
-        self._parent_var = tk.StringVar(value=str(default_parent()))
-        tk.Entry(
-            row2, textvariable=self._parent_var,
-            bg=_BTN_BG, fg=_FG_ON, insertbackground=_FG_ON,
-            font=_FONT, relief="flat", bd=1,
-            highlightthickness=1, highlightcolor=_BORDER, highlightbackground=_BORDER,
-        ).pack(side="left", fill="x", expand=True)
-        tk.Button(
-            row2, text="…", command=self._browse_parent,
-            bg=_BTN_BG, fg=_FG, activebackground=_BTN_ACT, activeforeground=_FG_ON,
-            font=_FONT_SM, relief="flat", bd=0, cursor="hand2", padx=6,
-        ).pack(side="left", padx=(2, 0))
-
-        self._create_btn = tk.Button(
-            parent, text="Create + Install ProjectMapper",
-            command=self._on_create,
-            bg=_BTN_BG, fg=_FG_ON,
-            activebackground=_BTN_ACT, activeforeground=_FG_ON,
-            font=_FONT, relief="flat", bd=0, cursor="hand2", pady=4,
-        )
-        self._create_btn.pack(fill="x", pady=(4, 0))
-
-    def _build_ws_list(self, parent: tk.Widget) -> None:
-        tk.Label(
-            parent, text="Workspaces",
-            bg=_BG, fg=_FG_ON, font=_FONT_HD, anchor="w",
-        ).pack(fill="x")
-
-        frame = tk.Frame(parent, bg=_BG)
-        frame.pack(fill="both", expand=True)
-
-        sb = tk.Scrollbar(frame, orient="vertical", bg=_BG2, troughcolor=_BG)
-        self._ws_listbox = tk.Listbox(
-            frame,
-            bg=_BTN_BG, fg=_FG_ON,
-            selectbackground=_BTN_ACT, selectforeground=_FG_ON,
-            font=_FONT_SM, relief="flat", bd=0, highlightthickness=0,
-            yscrollcommand=sb.set,
-        )
-        sb.config(command=self._ws_listbox.yview)
-        sb.pack(side="right", fill="y")
-        self._ws_listbox.pack(side="left", fill="both", expand=True)
-        self._ws_listbox.bind("<<ListboxSelect>>", self._on_ws_select)
-
-        btns = tk.Frame(parent, bg=_BG)
-        btns.pack(fill="x", pady=4)
-        self._launch_btn = tk.Button(
-            btns, text="Launch",
-            command=self._on_launch,
-            bg=_BTN_BG, fg=_FG_ON,
-            activebackground=_BTN_ACT, activeforeground=_FG_ON,
-            font=_FONT, relief="flat", bd=0, cursor="hand2",
-            state="disabled", padx=8, pady=2,
-        )
-        self._launch_btn.pack(side="left", padx=(0, 4))
-        self._proc_label = tk.Label(btns, text="", bg=_BG, fg=_FG_DIM, font=_FONT_SM)
-        self._proc_label.pack(side="left")
-
-    def _build_log(self, parent: tk.Widget) -> None:
-        tk.Label(
-            parent, text="Log",
-            bg=_BG, fg=_FG_ON, font=_FONT_HD, anchor="w",
-        ).pack(fill="x")
-        self._log = scrolledtext.ScrolledText(
-            parent,
-            bg=_BTN_BG, fg=_FG, insertbackground=_FG_ON,
-            font=_FONT_SM, relief="flat", bd=0,
-            state="disabled", wrap="word",
-        )
-        self._log.pack(fill="both", expand=True)
-
-    # ── Helpers ────────────────────────────────────────────────────────
-
-    def _log_line(self, text: str) -> None:
-        self._log.configure(state="normal")
-        self._log.insert("end", text + "\n")
-        self._log.see("end")
-        self._log.configure(state="disabled")
-
-    def _set_status(self, text: str) -> None:
-        self._status_var.set(text)
-
-    def _browse_parent(self) -> None:
-        d = filedialog.askdirectory(
-            title="Select parent directory",
-            initialdir=self._parent_var.get() or str(default_parent()),
-        )
-        if d:
-            self._parent_var.set(d)
-
-    def _refresh_list(self) -> None:
-        self._workspaces = self._store.load_all()
-        self._ws_listbox.delete(0, "end")
-        for ws in self._workspaces:
-            mark = "✓" if ws.installed else "…"
-            self._ws_listbox.insert("end", f"[{mark}] {ws.name}")
-        # Restore selection
-        if self._selected_ws:
-            for i, ws in enumerate(self._workspaces):
-                if ws.workspace_id == self._selected_ws.workspace_id:
-                    self._ws_listbox.selection_set(i)
-                    self._selected_ws = ws
-                    break
-        self._update_launch_btn()
-
-    def _on_ws_select(self, _event: tk.Event) -> None:
-        sel = self._ws_listbox.curselection()
-        self._selected_ws = self._workspaces[sel[0]] if sel else None
-        self._update_launch_btn()
-
-    def _update_launch_btn(self) -> None:
-        ws = self._selected_ws
-        if ws and ws.installed:
-            self._launch_btn.configure(state="normal")
+    def _refresh_ui(self) -> None:
+        if self._bridge.is_open:
+            root = self._bridge.root
+            self._folder_var.set(str(root))
+            self._status_var.set(f"● {root}")
+            self._status_lbl.config(fg=FG_ON)
+            self._action_frame.pack(fill="x", padx=8, before=self._status_lbl.master)
+            self._action_frame.pack(fill="x", padx=8)
+            self._install_frame.pack_forget()
+        elif self._folder_var.get().strip():
+            self._action_frame.pack_forget()
+            self._install_frame.pack(fill="x", padx=8)
+            self._status_lbl.config(fg=WARN)
         else:
-            self._launch_btn.configure(state="disabled")
+            self._action_frame.pack_forget()
+            self._install_frame.pack_forget()
+            self._status_var.set("No folder selected.")
+            self._status_lbl.config(fg=FG_DIM)
 
-        if ws:
-            running = self._registry.running_for_workspace(ws.workspace_id)
-            if running:
-                self._proc_label.configure(
-                    text=f"● PID {running[0].pid} running", fg=_FG_ON,
-                )
-            else:
-                self._proc_label.configure(text="○ stopped", fg=_FG_DIM)
+    def _set_busy(self, busy: bool, label: str = "") -> None:
+        self._busy = busy
+        state = "disabled" if busy else "normal"
+        for btn in (
+            self._scan_btn, self._compile_btn, self._export_btn,
+            self._install_btn, self._browse_btn, self._open_btn,
+        ):
+            btn.config(state=state)
+        self._bar_var.set(label if label else "Ready.")
+
+    # ── Folder picker ──────────────────────────────────────────────────
+
+    def _browse(self) -> None:
+        path = filedialog.askdirectory(title="Select Project Folder")
+        if path:
+            self._folder_var.set(path)
+            self._on_folder_confirm()
+
+    def _on_folder_confirm(self) -> None:
+        raw = self._folder_var.get().strip()
+        if not raw:
+            return
+        path = Path(raw)
+        if not path.is_dir():
+            self._status_var.set(f"✗ Not a directory: {raw}")
+            self._status_lbl.config(fg=WARN)
+            self._action_frame.pack_forget()
+            self._install_frame.pack_forget()
+            return
+
+        if has_sidecar(path):
+            try:
+                self._bridge.open(path)
+                self._append(f"Opened {path}\n", "hi")
+                self._refresh_ui()
+                self._bar_var.set(f"Session open: {path.name}")
+            except Exception as exc:
+                self._status_var.set(f"✗ {exc}")
+                self._status_lbl.config(fg=WARN)
+                self._append(f"[error] {exc}\n", "warn")
         else:
-            self._proc_label.configure(text="")
+            self._status_var.set(f"○  {path}  — no .project-mapper")
+            self._status_lbl.config(fg=WARN)
+            self._refresh_ui()
 
-    # ── Actions ────────────────────────────────────────────────────────
+    # ── Action runner ──────────────────────────────────────────────────
 
-    def _on_create(self) -> None:
-        if self._installing:
-            self._set_status("Installation already in progress.")
+    def _run_action(self, name: str) -> None:
+        if self._busy:
+            return
+        if not self._bridge.is_open:
+            self._append(
+                "[error] No session open. Select a folder with .project-mapper first.\n",
+                "warn",
+            )
             return
 
-        name = self._name_var.get().strip()
-        parent_str = self._parent_var.get().strip()
-        parent = Path(parent_str) if parent_str else default_parent()
+        if name == "scan":
+            action, payload, label = "project.scan", {}, "Scanning…"
+        elif name == "compile":
+            action, payload, label = "snapshot.compile", {}, "Compiling snapshot…"
+        else:
+            proj = self._proj_var.get()
+            action = "snapshot.export"
+            payload = {"projection": proj}
+            label = f"Exporting ({proj})…"
 
-        err = validate_new_workspace(name, parent)
-        if err:
-            self._log_line(f"[ERROR] {err}")
-            self._set_status(f"Error: {err}")
+        self._set_busy(True, label)
+        self._append(f"» {label}\n", "dim")
+
+        def _worker() -> None:
+            outcome = self._bridge.call(action, payload)
+            self.after(0, self._on_action_done, name, outcome)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_action_done(self, name: str, outcome: dict) -> None:
+        text = _format_scan(outcome) if name == "scan" else _format_outcome(outcome)
+        tag = "warn" if outcome.get("status") == "failed" else "ok"
+        self._append(text + "\n", tag)
+        self._set_busy(False)
+
+    # ── Install ────────────────────────────────────────────────────────
+
+    def _install(self) -> None:
+        raw = self._folder_var.get().strip()
+        if not raw:
             return
+        path = Path(raw)
+        from kleinos.workspace_manager.installer import install
 
-        ws = new_workspace(name, parent)
-        self._store.add(ws)
-        log_event("workspace.created", workspace_id=ws.workspace_id,
-                  name=ws.name, root=ws.root)
-        self._log_line(f"[+] Workspace '{ws.name}' created at {ws.root}")
-        self._set_status(f"Installing into '{ws.name}' …")
-        self._installing = True
-        self._create_btn.configure(state="disabled")
+        self._set_busy(True, "Installing…")
+        self._append(f"Installing .project-mapper into {path} …\n", "dim")
 
-        def _progress(msg: str) -> None:
-            self.after(0, lambda m=msg: self._log_line(f"    {m}"))
+        def _on_progress(line: str) -> None:
+            self.after(0, self._append, line + "\n", "dim")
 
-        def _done(rev: str) -> None:
-            ws.sidecar_rev = rev
-            ws.installed = True
-            self._store.update(ws)
-            log_event("app.installed", workspace_id=ws.workspace_id, rev=rev)
-            self.after(0, self._install_done)
+        def _on_done(rev: str) -> None:
+            def _finish() -> None:
+                self._append(f"[ok] installed at rev {rev}\n", "hi")
+                self._on_folder_confirm()
+                self._set_busy(False)
+            self.after(0, _finish)
 
-        def _error(msg: str) -> None:
-            log_event("app.failed", workspace_id=ws.workspace_id, error=msg)
-            self.after(0, lambda m=msg: self._install_error(m))
+        def _on_error(msg: str) -> None:
+            def _finish() -> None:
+                self._append(f"[error] {msg}\n", "warn")
+                self._set_busy(False)
+            self.after(0, _finish)
 
-        _install(Path(ws.root), _progress, _done, _error)
+        install(path, _on_progress, _on_done, _on_error)
 
-    def _install_done(self) -> None:
-        self._installing = False
-        self._create_btn.configure(state="normal")
-        self._log_line("[✓] Installation complete.")
-        self._set_status("Ready.")
-        self._refresh_list()
+    # ── Output helper ──────────────────────────────────────────────────
 
-    def _install_error(self, msg: str) -> None:
-        self._installing = False
-        self._create_btn.configure(state="normal")
-        self._log_line(f"[✗] {msg}")
-        self._set_status(f"Error: {msg}")
-
-    def _on_launch(self) -> None:
-        ws = self._selected_ws
-        if not ws or not ws.installed:
-            self._log_line("[!] Select an installed workspace first.")
-            return
-
-        self._log_line(f"[>] Launching ProjectMapper for '{ws.name}' …")
-
-        def _err(msg: str) -> None:
-            self.after(0, lambda m=msg: self._log_line(f"[✗] {m}"))
-
-        proc = _launch(Path(ws.root), on_error=_err)
-        if proc:
-            record = self._registry.register(ws.workspace_id, proc)
-            log_event("app.started", workspace_id=ws.workspace_id,
-                      run_id=record.run_id, pid=record.pid)
-            self._log_line(f"[✓] Started PID {proc.pid}")
-            self._update_launch_btn()
-
-    # ── Periodic poll ──────────────────────────────────────────────────
-
-    def _poll(self) -> None:
-        changed = self._registry.poll_all()
-        for rec in changed:
-            status = "stopped" if rec.exit_code == 0 else "failed"
-            log_event(f"app.{status}", workspace_id=rec.workspace_id,
-                      run_id=rec.run_id, exit_code=rec.exit_code)
-            self._log_line(f"[·] PID {rec.pid} exited (code {rec.exit_code})")
-        if changed:
-            self._update_launch_btn()
-        self.after(_POLL_MS, self._poll)
+    def _append(self, text: str, tag: str = "") -> None:
+        self._output.config(state="normal")
+        if tag:
+            self._output.insert("end", text, tag)
+        else:
+            self._output.insert("end", text)
+        self._output.see("end")
+        self._output.config(state="disabled")

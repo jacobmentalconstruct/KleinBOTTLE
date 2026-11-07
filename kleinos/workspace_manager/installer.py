@@ -1,15 +1,44 @@
-"""Clone and pip-install .project-mapper into a workspace sidecar."""
+"""Sidecar detection, installation, and in-process launch for .project-mapper."""
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    import tkinter as tk
 
 _REPO_URL = "https://github.com/jacobmentalconstruct/.project-mapper.git"
 _SIDECAR  = ".project-mapper"
 
+
+# ── Detection ──────────────────────────────────────────────────────────
+
+def sidecar_path(workspace_root: Path) -> Path:
+    return workspace_root / _SIDECAR
+
+
+def has_sidecar(workspace_root: Path) -> bool:
+    """True when .project-mapper/src/projectmapper/ is present."""
+    return (sidecar_path(workspace_root) / "src" / "projectmapper").is_dir()
+
+
+def sidecar_rev(workspace_root: Path) -> Optional[str]:
+    """Return the sidecar's git short-rev, or None if unavailable."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(sidecar_path(workspace_root)),
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return None
+
+
+# ── Installation ───────────────────────────────────────────────────────
 
 def _venv_python(sidecar: Path) -> Path:
     scripts = "Scripts" if sys.platform == "win32" else "bin"
@@ -37,90 +66,94 @@ def install(
     on_done: Callable[[str], None],
     on_error: Callable[[str], None],
 ) -> None:
-    """Install the .project-mapper sidecar in a background thread.
+    """Clone and pip-install .project-mapper in a background thread.
 
-    Calls on_done(rev) on success, on_error(msg) on failure.
-    Both are called from the worker thread; callers must marshal to the UI thread.
+    on_done(rev) is called on success; on_error(msg) on failure.
+    Both fire from the worker thread — marshal to the UI thread with after().
     """
 
     def _worker() -> None:
-        sidecar = workspace_root / _SIDECAR
+        sidecar = sidecar_path(workspace_root)
 
-        # 1. Clone
         on_progress(f"Cloning {_REPO_URL} …")
         rc = _stream(
             ["git", "clone", _REPO_URL, str(sidecar)],
-            workspace_root,
-            on_progress,
+            workspace_root, on_progress,
         )
         if rc != 0:
             on_error(f"git clone failed (exit {rc})")
             return
 
-        # 2. Capture revision
-        try:
-            rev = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=str(sidecar), text=True,
-            ).strip()
-        except Exception:
-            rev = "unknown"
+        rev = sidecar_rev(workspace_root) or "unknown"
         on_progress(f"Cloned at revision {rev}")
 
-        # 3. Create virtual environment
         on_progress("Creating virtual environment …")
         rc = _stream(
             [sys.executable, "-m", "venv", str(sidecar / ".venv")],
-            workspace_root,
-            on_progress,
+            workspace_root, on_progress,
         )
         if rc != 0:
             on_error(f"venv creation failed (exit {rc})")
             return
 
-        # 4. pip install -e <sidecar>
         venv_py = _venv_python(sidecar)
-        on_progress("Installing project-mapper (pip install -e) …")
+        on_progress("Installing (pip install -e) …")
         rc = _stream(
             [str(venv_py), "-m", "pip", "install", "-e", str(sidecar)],
-            workspace_root,
-            on_progress,
+            workspace_root, on_progress,
         )
         if rc != 0:
             on_error(f"pip install failed (exit {rc})")
             return
 
-        # 5. Verify import
-        on_progress("Verifying import …")
-        result = subprocess.run(
-            [str(venv_py), "-c", "import projectmapper"],
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            on_error("import projectmapper failed — installation may be incomplete")
-            return
-
-        on_done(rev)
+        # Verify: projectmapper has no third-party deps so we can import from src/
+        on_progress("Verifying …")
+        src = str(sidecar / "src")
+        try:
+            if src not in sys.path:
+                sys.path.insert(0, src)
+            importlib.import_module("projectmapper")
+            on_done(rev)
+        except Exception as exc:
+            on_error(f"import projectmapper failed: {exc}")
 
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def launch(
+# ── In-process launch ──────────────────────────────────────────────────
+
+def launch_in_process(
     workspace_root: Path,
-    on_error: Callable[[str], None],
-) -> "subprocess.Popen | None":
-    """Launch project-mapper in its own native window. Returns the Popen or None."""
-    sidecar = workspace_root / _SIDECAR
-    venv_py = _venv_python(sidecar)
-    if not venv_py.exists():
-        on_error(f"Sidecar venv not found: {venv_py}")
-        return None
+    on_close: Callable[[], None],
+) -> "tk.Toplevel | None":
+    """Import ProjectMapperApp from the sidecar and open it on a Toplevel.
+
+    Uses KleinBOTTLE's existing Tk mainloop — no subprocess needed.
+    ProjectMapperApp builds its UI directly onto a Toplevel (not a Frame),
+    so it opens as a companion window rather than being drawn inside the CRT bezel.
+
+    Returns the Toplevel on success, None on import failure.
+    """
+    import tkinter as tk
+
+    sidecar = sidecar_path(workspace_root)
+    src = str(sidecar / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+
     try:
-        proc = subprocess.Popen(
-            [str(venv_py), "-m", "projectmapper", str(workspace_root)],
-            cwd=str(workspace_root),
-        )
-        return proc
+        mod = importlib.import_module("projectmapper.app")
+        ProjectMapperApp = getattr(mod, "ProjectMapperApp")
     except Exception as exc:
-        on_error(f"Launch failed: {exc}")
-        return None
+        raise RuntimeError(f"Cannot import ProjectMapperApp: {exc}") from exc
+
+    top = tk.Toplevel()
+    top.title(f"ProjectMapper — {workspace_root.name}")
+
+    def _on_wm_delete():
+        on_close()
+        top.destroy()
+
+    top.protocol("WM_DELETE_WINDOW", _on_wm_delete)
+    ProjectMapperApp(top, workspace_root)
+    return top
