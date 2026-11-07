@@ -24,6 +24,8 @@ from kleinos.adventure import TheShack
 from kleinos.mahisland import MAHisLAND
 from kleinos.image_gen_pane import ImageGenerator
 from kleinos.workspace_manager import WorkspaceManagerApp, PMBridge, make_pm_executor
+from kleinos.apps.code_audit_app import CodeAuditApp
+from kleinos.apps.concept_search_app import ConceptSearchApp
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
 # Shared ProjectMapper bridge — one session across the pane and the terminal.
@@ -190,7 +192,8 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
             scale=pc_scale,
             executor=make_pm_executor(_pm_bridge),
             apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp(),
-                  WorkspaceManagerApp(_pm_bridge)],
+                  WorkspaceManagerApp(_pm_bridge),
+                  CodeAuditApp(), ConceptSearchApp()],
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
         )
