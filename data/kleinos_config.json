@@ -11,5 +11,12 @@
       "tick": true
     }
   },
-  "pc_size": "large"
+  "pc_size": "large",
+  "image_pipeline": {
+    "path": "",
+    "github_url": "https://github.com/jacobmentalconstruct/image-generation-pipeline.git",
+    "comfyui_path": "C:\\Jacob\\Apps & Tools\\image-generation-pipeline\\data\\Packages\\ComfyUI\\main.py",
+    "comfyui_host": "127.0.0.1",
+    "comfyui_port": 8188
+  }
 }
