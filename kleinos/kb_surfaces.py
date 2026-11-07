@@ -363,7 +363,7 @@ class _WorldSelectScreen(tk.Frame):
         row.pack(fill="x", padx=8, pady=2)
         try:
             import json as _json
-            world_name = _json.loads(path.read_text(encoding="utf-8")).get("name", label or path.stem)
+            world_name = _json.loads(path.read_text(encoding="utf-8")).get("name") or label or path.stem
         except Exception:
             world_name = label or path.stem
 

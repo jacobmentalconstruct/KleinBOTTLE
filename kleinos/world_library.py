@@ -58,6 +58,12 @@ def save_snapshot(name: str, source: Path = WIP_WORLD) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = LIBRARY_DIR / f"{safe}_{ts}.json"
     shutil.copy2(source, dest)
+    try:
+        data = json.loads(dest.read_text(encoding="utf-8"))
+        data["name"] = name.strip() or safe
+        dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
     return dest
 
 
