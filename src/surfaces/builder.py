@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -29,6 +30,7 @@ class BuilderSurface(ttk.Frame):
         self.on_room_changed: Optional[Callable] = None
         self.generate_btn_callback: Optional[Callable[[str], None]] = None
         self.generate_all_callback: Optional[Callable[[], None]] = None
+        self._auto_id = False
         # A surface is hosted by the application shell (Notebook); do not pack it here.
         self._build()
         self.refresh_tree()
@@ -74,7 +76,9 @@ class BuilderSurface(ttk.Frame):
             entry.pack(anchor="w")
             if key == "id":
                 self.id_entry = entry
+                entry.bind("<Key>", lambda _e: setattr(self, "_auto_id", False))
             if key == "name":
+                self.vars["name"].trace_add("write", self._on_name_changed)
                 ttk.Button(part, text="✦", width=3,
                            command=lambda: self._gen_field("name")).pack(anchor="w", pady=(2, 0))
         desc_hdr = ttk.Frame(content)
@@ -141,7 +145,12 @@ class BuilderSurface(ttk.Frame):
         self._base = deepcopy(room)
         for key in ("id", "name", "area"):
             self.vars[key].set(room.get(key, ""))
-        self.id_entry.configure(state="readonly" if existing else "normal")
+        if existing:
+            self.id_entry.configure(state="readonly")
+            self._auto_id = False
+        else:
+            self.id_entry.configure(state="disabled")
+            self._auto_id = True
         self._set_text(self.description, room.get("description", ""))
         self._set_text(self.exits, "\n".join(f"{key}:{value}" for key, value in room.get("exits", {}).items()))
         env = room.get("environment", {})
@@ -607,6 +616,28 @@ class BuilderSurface(ttk.Frame):
         self.id_entry.focus_set()
         if self.on_room_changed:
             self.on_room_changed()
+
+    # ── Auto-derive room ID from name ─────────────────────────────────
+
+    def _derive_id(self, name: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+        if not slug:
+            return ""
+        existing = {r["id"] for r in self.builder.rooms()}
+        n = 1
+        while True:
+            candidate = f"{slug}-{n:02d}"
+            if candidate not in existing:
+                return candidate
+            n += 1
+
+    def _on_name_changed(self, *_) -> None:
+        if not self._auto_id:
+            return
+        name = self.vars["name"].get()
+        derived = self._derive_id(name)
+        self.vars["id"].set(derived)
+        self.id_entry.configure(state="normal" if derived else "disabled")
 
     # ── AI field-generation hooks ─────────────────────────────────────
 
