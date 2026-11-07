@@ -141,6 +141,7 @@ class KleinPC:
         self._active_title: Optional[str] = None
         self._item_btns: dict[str, tk.Button] = {}
         self._btn_back: Optional[tk.Button] = None
+        self._content_type: str = "terminal"  # "terminal" | "settings" | "app" | "game"
 
         # Title → item lookup
         self._item_pool: dict[str, object] = {}
@@ -243,9 +244,27 @@ class KleinPC:
     # ──────────────────────────────────────────────────────────────────
 
     def _build_sidebar(self, parent: tk.Widget) -> None:
-        sb = tk.Frame(parent, bg=_S_BG, width=_S_WIDTH)
+        # Wrapper holds either the full sidebar or the collapsed strip in-place
+        self._sb_wrapper = tk.Frame(parent, bg=_S_BG)
+        self._sb_wrapper.pack(side="left", fill="y")
+
+        # Full sidebar frame
+        sb = tk.Frame(self._sb_wrapper, bg=_S_BG, width=_S_WIDTH)
         sb.pack(side="left", fill="y")
         sb.pack_propagate(False)
+        self._sb_frame = sb
+
+        # Collapsed strip — hidden until a game is running
+        self._sb_strip = tk.Frame(self._sb_wrapper, bg=_S_BG, width=22)
+        tk.Button(
+            self._sb_strip,
+            text="›",
+            command=self._expand_sidebar,
+            bg=_S_BG, fg=_S_FG,
+            activebackground=_S_HOV, activeforeground=_S_FG_ON,
+            font=("Consolas", 14), relief="flat",
+            bd=0, cursor="hand2", padx=2,
+        ).pack(fill="y", expand=True)
 
         tk.Frame(parent, bg=_S_SEP, width=1).pack(side="left", fill="y")
 
@@ -257,7 +276,8 @@ class KleinPC:
 
         # Terminal — fixed, never in a category
         self._btn_terminal = self._nav_btn(
-            sb, "▶  Terminal", self._select_terminal,
+            sb, "▶  Terminal",
+            lambda: self._guard_nav(self._select_terminal),
             tooltip="Open the KleinOS terminal",
         )
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
@@ -270,13 +290,18 @@ class KleinPC:
         # Footer
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
         self._btn_settings = self._nav_btn(
-            sb, "⚙  Settings", self._select_settings,
+            sb, "⚙  Settings",
+            lambda: self._guard_nav(self._select_settings),
             tooltip="Manage categories and preferences",
         )
         if self._on_exit is not None:
+            _exit_cb = self._on_exit
             tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-            self._btn_back = self._nav_btn(sb, "← Back", self._on_exit,
-                                           tooltip="Return to text adventure")
+            self._btn_back = self._nav_btn(
+                sb, "← Back",
+                lambda: self._guard_nav(_exit_cb),
+                tooltip="Return to text adventure",
+            )
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
         tk.Frame(sb, bg=_S_BG).pack(fill="both", expand=True)
 
@@ -345,7 +370,7 @@ class KleinPC:
         btn = self._nav_btn(
             parent,
             f"·  {item.title}",  # type: ignore[attr-defined]
-            lambda i=item: self._select_item(i),
+            lambda i=item: self._guard_nav(lambda: self._select_item(i)),
             tooltip=desc,
         )
         btn.bind("<Button-3>", lambda e, i=item: self._show_item_menu(i, e))
@@ -357,7 +382,7 @@ class KleinPC:
         btn = tk.Button(
             parent,
             text=f"    {item.title}",  # type: ignore[attr-defined]
-            command=lambda i=item: self._select_item(i),
+            command=lambda i=item: self._guard_nav(lambda: self._select_item(i)),
             bg=_S_BTN, fg=_S_FG,
             activebackground=_S_HOV, activeforeground=_S_FG_ON,
             font=_S_FONT_SM, relief="flat", anchor="w",
@@ -413,6 +438,30 @@ class KleinPC:
             cat["_items_frame"].pack_forget()
             cat["_toggle_btn"].configure(text=f"▶  {cat['label']}")
         self._save_layout()
+
+    def _collapse_sidebar(self) -> None:
+        """Shrink sidebar to a narrow expand-arrow strip (used when a game starts)."""
+        self._sb_frame.pack_forget()
+        self._sb_strip.pack(side="left", fill="y")
+
+    def _expand_sidebar(self) -> None:
+        """Restore full sidebar from the collapsed strip."""
+        self._sb_strip.pack_forget()
+        self._sb_frame.pack(side="left", fill="y")
+
+    def _guard_nav(self, action: Callable) -> None:
+        """Show a leave-confirmation dialog when an app or game is active."""
+        if self._content_type in ("app", "game"):
+            from tkinter import messagebox
+            ok = messagebox.askyesno(
+                "Leave current view?",
+                "You may lose unsaved data.\n\nProceed anyway?",
+                icon="warning",
+                parent=self._window or self._content,
+            )
+            if not ok:
+                return
+        action()
 
     def _set_active(self, btn: Optional[tk.Button], title: Optional[str] = None) -> None:
         if self._active_btn:
@@ -476,6 +525,7 @@ class KleinPC:
                     pass
 
     def _select_terminal(self) -> None:
+        self._content_type = "terminal"
         self._set_active(self._btn_terminal)
         self._swap(lambda: TerminalPane(self._content, executor=self._executor))
 
@@ -484,19 +534,24 @@ class KleinPC:
         self._set_active(btn, item.title)  # type: ignore[attr-defined]
         if hasattr(item, "create"):
             if isinstance(item, KleinGame):
-                self._set_sidebar_enabled(False)
+                self._content_type = "game"
+                self._collapse_sidebar()
                 def _game_exit():
-                    self._set_sidebar_enabled(True)
+                    self._content_type = "terminal"
+                    self._expand_sidebar()
                     self._select_terminal()
                 self._swap(lambda i=item: i.create(self._content, on_exit=_game_exit))  # type: ignore[attr-defined]
             else:
+                self._content_type = "app"
                 self._swap(lambda i=item: i.create(self._content, on_exit=self._select_terminal))  # type: ignore[attr-defined]
         else:
+            self._content_type = "app"
             self._swap(lambda i=item: AppPane(self._content, app=i, on_exit=self._select_terminal))
 
     def _select_settings(self) -> None:
         from kleinos import config as _config
         from kleinos.settings_pane import SettingsPane
+        self._content_type = "settings"
         self._set_active(self._btn_settings)
         self._swap(lambda: SettingsPane(
             self._content,
