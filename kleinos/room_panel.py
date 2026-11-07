@@ -36,6 +36,9 @@ except ImportError:
 
 _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
 
+_SUBMODULE_PIPELINE = Path(__file__).resolve().parent.parent / "tools" / "image-pipeline"
+
+
 def _pipeline_root() -> Path:
     """Read pipeline path from config at call time so settings changes take effect."""
     try:
@@ -46,7 +49,7 @@ def _pipeline_root() -> Path:
             return Path(p)
     except Exception:
         pass
-    return Path(r"C:\Jacob\Apps & Tools\image-generation-pipeline")
+    return _SUBMODULE_PIPELINE
 _ROOMS_DIR = Path(__file__).resolve().parent.parent / "data" / "rooms"
 
 _BG        = "#010a01"

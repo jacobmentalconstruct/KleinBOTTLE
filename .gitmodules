@@ -1,0 +1,3 @@
+[submodule "tools/image-pipeline"]
+	path = tools/image-pipeline
+	url = https://github.com/jacobmentalconstruct/image-generation-pipeline.git

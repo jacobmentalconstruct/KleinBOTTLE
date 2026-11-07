@@ -23,8 +23,8 @@ _DEFAULTS: dict = {
     "palette": "green",
     "pc_size": "medium",
     "image_pipeline": {
-        "path": r"C:\Jacob\Apps & Tools\image-generation-pipeline",
-        "github_url": "",
+        "path": "",
+        "github_url": "https://github.com/jacobmentalconstruct/image-generation-pipeline.git",
     },
     "audio": {
         "enabled": True,

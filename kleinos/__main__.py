@@ -22,6 +22,7 @@ from kleinos.game_pane import SpaceInvaders
 from kleinos.kb_surfaces import WorldBuilder, TextAdventure, KleinAdventurePane
 from kleinos.adventure import TheShack
 from kleinos.mahisland import MAHisLAND
+from kleinos.image_gen_pane import ImageGenerator
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
 _SPLASH_PATH = _KB_ROOT / "assets" / "logos" / "klein-bottle-logo.jpg"
@@ -151,7 +152,7 @@ class TitleScreen(tk.Canvas):
 def _make_pc(root: tk.Tk) -> KleinPC:
     return KleinPC(
         root,
-        apps=[WorldBuilder(), OllamaChat(), NotesApp()],
+        apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp()],
         games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
         title="KleinBOTTLE PC",
     )
