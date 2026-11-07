@@ -11,7 +11,7 @@
       "tick": true
     }
   },
-  "pc_size": "medium",
+  "pc_size": "large",
   "image_pipeline": {
     "path": "",
     "github_url": "https://github.com/jacobmentalconstruct/image-generation-pipeline.git",

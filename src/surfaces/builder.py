@@ -31,6 +31,7 @@ class BuilderSurface(ttk.Frame):
         self.generate_btn_callback: Optional[Callable[[str], None]] = None
         self.generate_all_callback: Optional[Callable[[], None]] = None
         self._auto_id = False
+        self._pending_attach: tuple[str, str] | None = None   # (parent_id, back_direction)
         # A surface is hosted by the application shell (Notebook); do not pack it here.
         self._build()
         self.refresh_tree()
@@ -225,6 +226,7 @@ class BuilderSurface(ttk.Frame):
             self._refreshing = False
             return
         self.selected_id = new_id
+        self._pending_attach = None
         self._populate(self.builder.room(new_id), existing=True)
         if self.on_room_changed:
             self.on_room_changed()
@@ -232,6 +234,7 @@ class BuilderSurface(ttk.Frame):
     def new_room(self, ask: bool = True) -> None:
         if ask and not self._guard_unsaved():
             return
+        self._pending_attach = None
         self.selected_id = None
         self._refreshing = True
         self.tree.selection_remove(*self.tree.selection())
@@ -279,10 +282,26 @@ class BuilderSurface(ttk.Frame):
         except (WorldValidationError, OSError) as exc:
             messagebox.showerror("Cannot save room", str(exc), parent=self)
             return
-        self.selected_id = room["id"]
+        new_id = room["id"]
+        self.selected_id = new_id
+        # Auto-wire the forward exit on the parent when saving an attached room.
+        attach_note = ""
+        if self._pending_attach is not None:
+            parent_id, back_dir = self._pending_attach
+            self._pending_attach = None
+            fwd_dir = self._OPPOSITE.get(back_dir)
+            if fwd_dir:
+                try:
+                    parent = self.builder.room(parent_id)
+                    if fwd_dir not in parent.get("exits", {}):
+                        parent.setdefault("exits", {})[fwd_dir] = new_id
+                        self.builder.save_room(parent, original_id=parent_id)
+                        attach_note = f"; added '{fwd_dir}' exit to '{parent_id}'"
+                except (WorldValidationError, OSError):
+                    pass  # non-fatal — the new room is already saved
         self.refresh_tree(focus=self.selected_id)
         self._populate(self.builder.room(self.selected_id), existing=True)
-        self.status.set(f"Saved room '{self.selected_id}' to world.json")
+        self.status.set(f"Saved room '{self.selected_id}'{attach_note}")
 
     def delete_room(self) -> None:
         if self.selected_id is None or not self._guard_unsaved():
@@ -554,6 +573,14 @@ class BuilderSurface(ttk.Frame):
         "up", "down", "in", "out",
         "northeast", "northwest", "southeast", "southwest",
     ]
+    _OPPOSITE = {
+        "north": "south",     "south": "north",
+        "east":  "west",      "west":  "east",
+        "up":    "down",      "down":  "up",
+        "in":    "out",       "out":   "in",
+        "northeast": "southwest", "southwest": "northeast",
+        "northwest": "southeast", "southeast": "northwest",
+    }
 
     def _show_tree_menu(self, event: tk.Event) -> None:
         item = self.tree.identify_row(event.y)
@@ -626,6 +653,7 @@ class BuilderSurface(ttk.Frame):
         """Blank the form for a new room pre-wired back to parent_id via direction."""
         if not self._guard_unsaved():
             return
+        self._pending_attach = (parent_id, direction)
         self.selected_id = None
         self._refreshing = True
         self.tree.selection_remove(*self.tree.selection())

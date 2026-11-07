@@ -178,6 +178,10 @@ class TerminalPane(tk.Frame):
         """External callers can push text in (from the main thread)."""
         self._append(text, "output")
 
+    def focus_entry(self) -> None:
+        """Move keyboard focus to the input entry."""
+        self._entry.focus_set()
+
     # ------------------------------------------------------------------
     # Built-in mini-shell (used when no executor is provided)
     # ------------------------------------------------------------------

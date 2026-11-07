@@ -332,6 +332,7 @@ class TheShack(KleinGame):
             pane.write(_TITLE)
             opening = executor("")
             pane.write(opening + "\n")
+            pane.focus_entry()
 
         pane.after(80, _auto_start)
         return pane
