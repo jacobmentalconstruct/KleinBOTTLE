@@ -31,6 +31,19 @@ Finds calls that can freeze a UI or async thread (subprocess, sleep, requests, s
 python kleinos/apps/blocking_scanner/app.py <target>
 ```
 
+### `concept_search` — Donor Material Finder
+
+Takes a plain-language concept and ranks existing functions in a directory by
+how well they match it. Keyword mode is always available; semantic mode
+(sentence-transformers) is optional and prompted on first use. UI panels can
+call `deps.is_semantic_available()` to grey semantic/combined buttons until
+the dependency is installed.
+
+```bash
+python kleinos/apps/concept_search/app.py "walk a file tree grouping by extension" src/
+python kleinos/apps/concept_search/app.py "your concept" <target> --mode keyword
+```
+
 ---
 
 ## Shared Pattern
@@ -68,3 +81,4 @@ All support `--out FILE` to write to a file instead of stdout.
 | `duplicate_finder` (dead-code mode) | `dead_code_finder` |
 | `duplicate_finder` (complexity mode) | `python_complexity_scorer` |
 | `blocking_scanner` | `scan_blocking_calls` |
+| `concept_search` | `python_code_units` (lib) + optional `sentence-transformers` |

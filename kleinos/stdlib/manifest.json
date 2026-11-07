@@ -86,6 +86,15 @@
       "summary": "Safety audit: blocking calls that can freeze a UI or async thread.",
       "modes": ["blocking_calls"],
       "stdlib_deps": ["scan_blocking_calls"]
+    },
+    {
+      "id": "concept_search",
+      "path": "kleinos/apps/concept_search/app.py",
+      "summary": "Donor-material finder: given a plain-language concept, ranks existing functions by relevance.",
+      "modes": ["keyword", "semantic", "combined"],
+      "optional_deps": ["sentence-transformers"],
+      "stdlib_deps": ["python_code_units (lib)"],
+      "ui_capability_check": "kleinos.apps.concept_search.deps.is_semantic_available"
     }
   ],
   "tool_contract": {
