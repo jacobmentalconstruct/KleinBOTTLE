@@ -238,56 +238,58 @@ class SettingsPane(tk.Frame):
                  ).pack(fill="x", pady=(14, 2))
         tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
 
-        self._pipeline_path_var = tk.StringVar(
-            value=self._cfg.get("image_pipeline", {}).get(
-                "path", r"C:\Jacob\Apps & Tools\image-generation-pipeline"
-            )
-        )
+        # Status line showing current configured path
+        self._pipe_status_var = tk.StringVar()
+        self._update_pipeline_status()
+        tk.Label(parent, textvariable=self._pipe_status_var,
+                 bg=_BG, fg=_TEXT_FG, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(0, 6))
+
+        # Option 1: Browse for an existing installation
+        browse_row = tk.Frame(parent, bg=_BG)
+        browse_row.pack(fill="x", pady=(0, 2))
+        tk.Button(
+            browse_row, text="Browse existing…",
+            command=self._browse_pipeline,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT,
+            relief="flat", padx=10, pady=4, bd=0, cursor="hand2",
+        ).pack(side="left")
+        tk.Label(browse_row, text="  Pick a folder where it is already installed",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM).pack(side="left")
+
+        # Option 2: Clone into the KleinBOTTLE install directory
+        from pathlib import Path as _Path
+        _local_pipe = _Path(__file__).resolve().parent.parent / "tools" / "image-pipeline"
+        install_row = tk.Frame(parent, bg=_BG)
+        install_row.pack(fill="x", pady=(0, 8))
+        tk.Button(
+            install_row, text="Install locally",
+            command=self._install_pipeline_local,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT,
+            relief="flat", padx=10, pady=4, bd=0, cursor="hand2",
+        ).pack(side="left")
+        tk.Label(install_row, text=f"  → {_local_pipe}",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM).pack(side="left")
+
+        # Advanced: Git URL (for Install locally)
+        gh_row = tk.Frame(parent, bg=_BG)
+        gh_row.pack(fill="x", pady=(0, 2))
+        tk.Label(gh_row, text="Git URL:", bg=_BG, fg=_TEXT_DIM,
+                 font=_FONT_SM, width=8, anchor="w").pack(side="left")
         self._pipeline_github_var = tk.StringVar(
             value=self._cfg.get("image_pipeline", {}).get("github_url", "")
         )
-
-        path_row = tk.Frame(parent, bg=_BG)
-        path_row.pack(fill="x", pady=(0, 2))
-        tk.Label(path_row, text="Path:", bg=_BG, fg=_TEXT_DIM,
-                 font=_FONT_SM, width=8, anchor="w").pack(side="left")
-        tk.Entry(
-            path_row, textvariable=self._pipeline_path_var,
-            bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
-            font=_FONT_SM, relief="flat",
-            highlightthickness=1, highlightcolor=_BORDER,
-        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-
-        gh_row = tk.Frame(parent, bg=_BG)
-        gh_row.pack(fill="x", pady=(0, 4))
-        tk.Label(gh_row, text="GitHub:", bg=_BG, fg=_TEXT_DIM,
-                 font=_FONT_SM, width=8, anchor="w").pack(side="left")
         tk.Entry(
             gh_row, textvariable=self._pipeline_github_var,
-            bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
+            bg=_BG, fg=_TEXT_DIM, insertbackground=_TEXT_FG,
             font=_FONT_SM, relief="flat",
             highlightthickness=1, highlightcolor=_BORDER,
         ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-
-        btn_row = tk.Frame(parent, bg=_BG)
-        btn_row.pack(fill="x")
-        tk.Button(
-            btn_row, text="Save Path",
-            command=self._save_pipeline_path,
-            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
-            activeforeground=_TEXT_HI, font=_FONT_SM,
-            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
-        ).pack(side="left", padx=(0, 6))
-        tk.Button(
-            btn_row, text="Install (git clone)",
-            command=self._install_pipeline,
-            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
-            activeforeground=_TEXT_HI, font=_FONT_SM,
-            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
-        ).pack(side="left")
-        tk.Label(parent, text="Install clones the GitHub repo to the path above.",
+        tk.Label(parent, text="Paste repo URL above before clicking Install locally.",
                  bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
-                 ).pack(fill="x", pady=(4, 0))
+                 ).pack(fill="x", pady=(2, 0))
 
     def _select_pc_size(self, key: str) -> None:
         if key == self._cfg.get("pc_size", "medium"):
@@ -320,29 +322,54 @@ class SettingsPane(tk.Frame):
             )
         self._status_var.set(f"Palette set to '{_PALETTE_LABELS[key]}' — restart to apply.")
 
-    def _save_pipeline_path(self) -> None:
-        path = self._pipeline_path_var.get().strip()
-        url  = self._pipeline_github_var.get().strip()
+    def _update_pipeline_status(self) -> None:
+        from pathlib import Path as _Path
+        cfg_pip = self._cfg.get("image_pipeline", {})
+        path = cfg_pip.get("path", "")
+        local = _Path(__file__).resolve().parent.parent / "tools" / "image-pipeline"
+        if path and _Path(path).exists():
+            self._pipe_status_var.set(f"● Configured: {path}")
+        elif not path and local.exists():
+            self._pipe_status_var.set(f"● Local install: {local}")
+        elif path:
+            self._pipe_status_var.set(f"⚠ Not found: {path}")
+        else:
+            self._pipe_status_var.set("○ Not configured")
+
+    def _browse_pipeline(self) -> None:
+        from tkinter.filedialog import askdirectory
+        folder = askdirectory(title="Select image-generation-pipeline folder")
+        if not folder:
+            return
         cfg_pip = self._cfg.setdefault("image_pipeline", {})
-        cfg_pip["path"] = path
-        cfg_pip["github_url"] = url
+        cfg_pip["path"] = folder
         _config.save(self._cfg)
+        self._update_pipeline_status()
         self._status_var.set("Pipeline path saved.")
 
-    def _install_pipeline(self) -> None:
+    def _install_pipeline_local(self) -> None:
         import subprocess
-        path = self._pipeline_path_var.get().strip()
-        url  = self._pipeline_github_var.get().strip()
+        from pathlib import Path as _Path
+        local = _Path(__file__).resolve().parent.parent / "tools" / "image-pipeline"
+        url = self._pipeline_github_var.get().strip()
         if not url:
-            self._status_var.set("Set a GitHub URL first.")
+            url = self._cfg.get("image_pipeline", {}).get("github_url", "")
+        if not url:
+            self._status_var.set("Paste the Git URL above, then try again.")
             return
-        if not path:
-            self._status_var.set("Set a path first.")
+        if local.exists():
+            self._status_var.set(f"Already installed: {local}")
+            self._update_pipeline_status()
             return
-        self._save_pipeline_path()
-        self._status_var.set(f"Cloning to {path}…  (check terminal for progress)")
+        local.parent.mkdir(parents=True, exist_ok=True)
+        cfg_pip = self._cfg.setdefault("image_pipeline", {})
+        cfg_pip["github_url"] = url
+        cfg_pip["path"] = ""  # empty → _pipeline_root() falls back to local install
+        _config.save(self._cfg)
+        self._status_var.set(f"Cloning to {local}…  (check terminal for progress)")
         try:
-            subprocess.Popen(["git", "clone", url, path])
+            subprocess.Popen(["git", "clone", url, str(local)])
+            self._update_pipeline_status()
         except FileNotFoundError:
             self._status_var.set("git not found — install Git first.")
 
