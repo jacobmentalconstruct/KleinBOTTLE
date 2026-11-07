@@ -736,9 +736,9 @@ class MAHisLANDPane(tk.Canvas):
                     return
 
     def _do_place(self, kind: str) -> None:
-        # Place at the tile under the mouse cursor
-        tx = int(self._mx // TILE)
-        ty = int(self._my // TILE)
+        # Place exactly one tile out from the player in the facing direction
+        tx = int(self._px // TILE) + round(math.cos(self._angle))
+        ty = int(self._py // TILE) + round(math.sin(self._angle))
 
         if tx <= 0 or ty <= 0 or tx >= W_TILES - 1 or ty >= H_TILES - 1:
             self._flash_msg("Can't place there")
