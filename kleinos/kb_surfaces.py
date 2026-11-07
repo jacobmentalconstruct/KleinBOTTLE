@@ -35,7 +35,8 @@ if _KB_SRC not in sys.path:
 
 from kleinos.world_library import (  # noqa: E402
     MAIN_WORLD, WIP_WORLD,
-    ensure_wip, list_library, promote_to_main, save_snapshot,
+    delete_snapshot, ensure_wip, list_library,
+    promote_to_main, rename_snapshot, save_snapshot,
 )
 from kleinos.palette import (  # noqa: E402
     BG as _BG, BORDER as _BORDER, FG_ON as _FG, FG_DIM as _DIM,
@@ -335,7 +336,8 @@ class _WorldSelectScreen(tk.Frame):
             self._add_section(inner, "LIBRARY SNAPSHOTS")
             for entry in library:
                 self._add_row(inner, entry["path"], is_main=False,
-                              label=entry["name"])
+                              label=entry["name"], mtime=entry["mtime"],
+                              is_library=True)
 
     def _add_section(self, parent: tk.Frame, title: str) -> None:
         tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", padx=8, pady=(10, 2))
@@ -343,7 +345,9 @@ class _WorldSelectScreen(tk.Frame):
                  font=("Consolas", 8, "bold")).pack(anchor="w", padx=8)
 
     def _add_row(self, parent: tk.Frame, path: Path, *,
-                 is_main: bool, label: str = "") -> None:
+                 is_main: bool, label: str = "",
+                 mtime: float | None = None,
+                 is_library: bool = False) -> None:
         row = tk.Frame(parent, bg=_BG)
         row.pack(fill="x", padx=8, pady=2)
         try:
@@ -351,9 +355,35 @@ class _WorldSelectScreen(tk.Frame):
         except Exception:
             world_name = label or path.stem
 
-        tk.Label(row, text=f"  {world_name}",
+        # Left: name + optional timestamp
+        name_col = tk.Frame(row, bg=_BG)
+        name_col.pack(side="left", fill="x", expand=True)
+        tk.Label(name_col, text=f"  {world_name}",
                  bg=_BG, fg=_FG, font=("Consolas", 9),
-                 anchor="w").pack(side="left", fill="x", expand=True)
+                 anchor="w").pack(anchor="w")
+        if mtime is not None:
+            from datetime import datetime as _dt
+            ts_str = _dt.fromtimestamp(mtime).strftime("%Y-%m-%d  %H:%M")
+            tk.Label(name_col, text=f"  {ts_str}",
+                     bg=_BG, fg=_DIM, font=("Consolas", 7),
+                     anchor="w").pack(anchor="w")
+
+        # Right buttons (packed right-to-left so leftmost button appears first)
+        if is_library:
+            tk.Button(
+                row, text="✕ Delete",
+                bg=_BG, fg=_DIM,
+                activebackground=_HDR_BG, activeforeground=_FG,
+                relief="flat", font=("Consolas", 8), cursor="hand2",
+                command=lambda p=path, n=world_name: self._delete(p, n),
+            ).pack(side="right", padx=(0, 4))
+            tk.Button(
+                row, text="✎ Rename",
+                bg=_BG, fg=_DIM,
+                activebackground=_HDR_BG, activeforeground=_FG,
+                relief="flat", font=("Consolas", 8), cursor="hand2",
+                command=lambda p=path, n=world_name: self._rename(p, n),
+            ).pack(side="right", padx=(0, 4))
 
         if not is_main:
             tk.Button(
@@ -381,12 +411,42 @@ class _WorldSelectScreen(tk.Frame):
                 "The previous Main was saved to the library as a backup.",
                 parent=self,
             )
-            # Refresh the list
-            for w in self.winfo_children():
-                w.destroy()
-            self._build()
+            self._refresh()
         except Exception as exc:
             messagebox.showerror("Cannot promote", str(exc), parent=self)
+
+    def _rename(self, path: Path, current_name: str) -> None:
+        new_name = simpledialog.askstring(
+            "Rename snapshot",
+            "New name:",
+            initialvalue=current_name,
+            parent=self,
+        )
+        if not new_name or new_name.strip() == current_name:
+            return
+        try:
+            rename_snapshot(path, new_name.strip())
+            self._refresh()
+        except Exception as exc:
+            messagebox.showerror("Cannot rename", str(exc), parent=self)
+
+    def _delete(self, path: Path, name: str) -> None:
+        if not messagebox.askyesno(
+            "Delete snapshot",
+            f"Delete \"{name}\"?\nThis cannot be undone.",
+            parent=self,
+        ):
+            return
+        try:
+            delete_snapshot(path)
+            self._refresh()
+        except Exception as exc:
+            messagebox.showerror("Cannot delete", str(exc), parent=self)
+
+    def _refresh(self) -> None:
+        for w in self.winfo_children():
+            w.destroy()
+        self._build()
 
 
 # ── Title screen for in-PC game ───────────────────────────────────────

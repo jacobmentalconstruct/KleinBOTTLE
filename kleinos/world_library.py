@@ -9,11 +9,14 @@ Paths:
   data/world_library/   — named JSON snapshots
 
 Public API:
-  ensure_wip()              copy Main → WIP if WIP is missing
-  save_snapshot(name, src)  save a world file as a named library entry
-  list_library()            [{name, path, mtime}] newest-first
-  validate_for_promotion()  raises WorldLibraryError with reason on failure
-  promote_to_main(path)     validate + backup old Main + atomic replace
+  ensure_wip()                   copy Main → WIP if WIP is missing
+  save_snapshot(name, src)       save a world file as a named library entry
+                                 auto-suffixes _01/_02/… on duplicate display names
+  list_library()                 [{name, path, mtime}] newest-first
+  rename_snapshot(path, name)    update the display name stored inside a snapshot
+  delete_snapshot(path)          delete a snapshot file
+  validate_for_promotion()       raises WorldLibraryError with reason on failure
+  promote_to_main(path)          validate + backup old Main + atomic replace
 """
 from __future__ import annotations
 
@@ -50,22 +53,39 @@ def ensure_wip() -> None:
 # ── Library snapshots ─────────────────────────────────────────────────
 
 def save_snapshot(name: str, source: Path = WIP_WORLD) -> Path:
-    """Save source world file as a timestamped snapshot. Returns the new path."""
+    """Save source world file as a timestamped snapshot. Returns the new path.
+
+    If a snapshot with the same display name already exists the new entry is
+    automatically suffixed with _01, _02, … so names stay unique in the UI.
+    """
     if not source.exists():
         raise WorldLibraryError(f"Source world not found: {source}")
     LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-    safe = re.sub(r"[^\w\- ]", "", name).strip().replace(" ", "_") or "snapshot"
+    base_name = name.strip() or "snapshot"
+    final_name = _unique_name(base_name)
+    safe = re.sub(r"[^\w\- ]", "", final_name).replace(" ", "_") or "snapshot"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = LIBRARY_DIR / f"{safe}_{ts}.json"
     shutil.copy2(source, dest)
     try:
         data = json.loads(dest.read_text(encoding="utf-8"))
-        data["name"] = name.strip() or safe
+        data["name"] = final_name
         dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     except (json.JSONDecodeError, OSError, KeyError) as exc:
         print(f"[world_library] save_snapshot: could not update name in {dest.name}: {exc}",
               file=sys.stderr)
     return dest
+
+
+def _unique_name(base: str) -> str:
+    """Return base, or base_01 / base_02 … if base is already taken."""
+    existing = {e["name"].lower() for e in list_library()}
+    if base.lower() not in existing:
+        return base
+    n = 1
+    while f"{base}_{n:02d}".lower() in existing:
+        n += 1
+    return f"{base}_{n:02d}"
 
 
 def list_library() -> list[dict]:
@@ -84,6 +104,21 @@ def list_library() -> list[dict]:
         except (json.JSONDecodeError, OSError) as exc:
             print(f"[world_library] list_library: skipping {p.name}: {exc}", file=sys.stderr)
     return sorted(entries, key=lambda e: e["mtime"], reverse=True)
+
+
+def rename_snapshot(path: Path, new_name: str) -> None:
+    """Update the display name stored inside a snapshot file."""
+    new_name = new_name.strip()
+    if not new_name:
+        raise WorldLibraryError("Snapshot name cannot be empty.")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["name"] = new_name
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def delete_snapshot(path: Path) -> None:
+    """Delete a snapshot file from the library."""
+    path.unlink()
 
 
 # ── Task 3: Promotion validation ──────────────────────────────────────
