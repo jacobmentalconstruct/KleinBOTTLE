@@ -172,14 +172,14 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
         frame.pack(fill="both", expand=True)
         _pc_frame.append(frame)
 
-        # Scale monitor to fill ~90% of the available screen,
-        # leaving room for the taskbar and window chrome.
-        # Natural widescreen monitor canvas: 760 × 480 (+ 20px pack padding each axis)
-        _NAT_W, _NAT_H = 760 + 20, 480 + 20
+        # Scale monitor to fit available screen space.
+        # Natural widescreen canvas: 760 × 480. Add 20px for pack padding each axis,
+        # 80px for window titlebar + taskbar chrome.
+        _NAT_CW, _NAT_CH = 760, 480
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
-        pc_scale = min(sw * 0.90 / _NAT_W, sh * 0.88 / _NAT_H)
-        pc_scale = max(0.65, min(pc_scale, 3.0))
+        pc_scale = min((sw - 20) / _NAT_CW, (sh - 100) / _NAT_CH)
+        pc_scale = max(0.65, min(pc_scale, 2.5))
 
         KleinPC(
             root,
@@ -190,15 +190,14 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
         )
-        # Resize root to wrap the monitor snugly after it renders
-        def _fit_window() -> None:
-            root.update_idletasks()
-            w = frame.winfo_reqwidth()
-            h = frame.winfo_reqheight()
-            if w > 1 and h > 1:
-                root.geometry(f"{w}x{h}")
-                root.resizable(False, False)
-        root.after(80, _fit_window)
+        # Snap window to the monitor's exact rendered size.
+        # winfo_reqwidth on the expanding frame is unreliable; calculate from scale.
+        win_w = int(_NAT_CW * pc_scale) + 20
+        win_h = int(_NAT_CH * pc_scale) + 20
+        root.after(80, lambda: (
+            root.geometry(f"{win_w}x{win_h}"),
+            root.resizable(False, False),
+        ))
 
     pane.set_computer_callback(open_kleinpc)
     for child in pane.winfo_children():
