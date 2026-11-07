@@ -226,4 +226,56 @@ class TextAdventure(KleinChat):
         self._world_path = world_path
 
     def create(self, parent: tk.Widget, on_exit: Callable) -> tk.Widget:
-        return KleinAdventurePane(parent, world_path=self._world_path, on_exit=on_exit)
+        return _KleinBOTTLETitleScreen(parent, world_path=self._world_path, on_exit=on_exit)
+
+
+class _KleinBOTTLETitleScreen(tk.Canvas):
+    """Title screen for the in-PC KleinBOTTLE game. Click/Enter starts the adventure."""
+
+    _BG     = "#010a01"
+    _BRIGHT = "#00ff55"
+    _MID    = "#00aa33"
+    _DIM    = "#004d1a"
+
+    def __init__(self, parent: tk.Widget, *, world_path: Path, on_exit: Callable):
+        super().__init__(parent, bg=self._BG, highlightthickness=0)
+        self._parent     = parent
+        self._world_path = world_path
+        self._on_exit    = on_exit
+        self._blink_visible = True
+        self._blink_id: str = ""
+        self.bind("<Configure>", self._redraw)
+        self.bind("<Return>",   lambda _: self._start())
+        self.bind("<space>",    lambda _: self._start())
+        self.bind("<Button-1>", lambda _: self._start())
+        self.focus_set()
+        self._blink_id = self.after(650, self._blink)
+
+    def _redraw(self, _=None) -> None:
+        self.delete("all")
+        w = self.winfo_width()  or 600
+        h = self.winfo_height() or 400
+        cx, cy = w // 2, h // 2
+
+        self.create_text(cx, cy - 60,
+                         text="KleinBOTTLE",
+                         fill=self._BRIGHT, font=("Consolas", 32, "bold"))
+        self.create_text(cx, cy - 10,
+                         text="A house.  A computer.  A world inside itself.",
+                         fill=self._MID, font=("Consolas", 9))
+        if self._blink_visible:
+            self.create_text(cx, cy + 30,
+                             text="PRESS  ENTER",
+                             fill=self._DIM, font=("Consolas", 9))
+
+    def _blink(self) -> None:
+        self._blink_visible = not self._blink_visible
+        self._redraw()
+        self._blink_id = self.after(650, self._blink)
+
+    def _start(self) -> None:
+        if self._blink_id:
+            self.after_cancel(self._blink_id)
+        self.destroy()
+        pane = KleinAdventurePane(self._parent, world_path=self._world_path, on_exit=self._on_exit)
+        pane.pack(fill="both", expand=True)

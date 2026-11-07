@@ -303,8 +303,13 @@ class TheShack(KleinGame):
 
         engine = AdventureEngine(world)
         intro  = world.get("intro", "")
+        started = [False]
 
         def executor(cmd: str) -> str:
+            if not started[0]:
+                started[0] = True
+                opening = engine.start()
+                return (intro + "\n\n" + opening) if intro else opening
             result = engine.process(cmd)
             if result == "__QUIT__":
                 parent.after(0, on_exit)
@@ -313,10 +318,15 @@ class TheShack(KleinGame):
 
         pane = TerminalPane(parent, executor=executor, prompt="> ", header="")
 
-        def _show_opening() -> None:
-            opening = engine.start()
-            text = (intro + "\n\n" + opening) if intro else opening
-            pane.write(text + "\n")
-
-        pane.after(80, _show_opening)
+        _TITLE = (
+            "\n"
+            "  ╔══════════════════════════════════════╗\n"
+            "  ║            T H E   S H A C K         ║\n"
+            "  ║   An abandoned shack in the woods.   ║\n"
+            "  ║   Something is hidden beneath it.    ║\n"
+            "  ╚══════════════════════════════════════╝\n"
+            "\n"
+            "  Press ENTER to begin.\n"
+        )
+        pane.after(80, lambda: pane.write(_TITLE))
         return pane
