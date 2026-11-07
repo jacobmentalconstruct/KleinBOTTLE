@@ -369,6 +369,8 @@ class ImageGenPane(tk.Frame):
             for raw_line in self._proc.stdout:  # type: ignore[union-attr]
                 line = raw_line.rstrip()
                 self.after(0, lambda l=line: self._append_log(l))
+                # Echo each line to the status bar so startup progress is visible
+                self.after(0, lambda l=line: self._status(l[:90]))
                 if not ready and any(sig in line for sig in _READY_SIGNALS):
                     ready = True
                     self.after(0, self._on_pipeline_ready)
