@@ -172,14 +172,12 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
         frame.pack(fill="both", expand=True)
         _pc_frame.append(frame)
 
-        # Scale monitor to fit available screen space.
-        # Natural widescreen canvas: 760 × 480. Add 20px for pack padding each axis,
-        # 80px for window titlebar + taskbar chrome.
+        # Use the config-based scale (same as the original Toplevel window did).
+        # Dynamic scaling deferred until apps/games are built to support it.
+        from kleinos import _config as _cfg
+        _startup_cfg = _cfg.load()
+        pc_scale = _cfg._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
         _NAT_CW, _NAT_CH = 760, 480
-        sw = root.winfo_screenwidth()
-        sh = root.winfo_screenheight()
-        pc_scale = min((sw - 20) / _NAT_CW, (sh - 100) / _NAT_CH)
-        pc_scale = max(0.65, min(pc_scale, 2.5))
 
         KleinPC(
             root,
@@ -190,8 +188,7 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
         )
-        # Snap window to the monitor's exact rendered size.
-        # winfo_reqwidth on the expanding frame is unreliable; calculate from scale.
+        # Snap window to the monitor's exact size (mathematical, not winfo_reqwidth).
         win_w = int(_NAT_CW * pc_scale) + 20
         win_h = int(_NAT_CH * pc_scale) + 20
         root.after(80, lambda: (
