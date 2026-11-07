@@ -176,6 +176,11 @@ class RoomImagePanel(tk.Frame):
 
     def _start_generation(self, room_id: str, room_name: str,
                            description: str, area: str) -> None:
+        from kleinos.pipeline_client import is_configured as _is_cfg
+        if not _is_cfg():
+            self._set_status(
+                "Image pipeline not configured — open the Image Generator to set it up")
+            return
         # Silently skip if pipeline is offline (auto-triggered, non-interactive)
         try:
             import urllib.request as _ur

@@ -36,6 +36,7 @@ _DEFAULTS: dict = {
         "comfyui_path": "",
         "comfyui_host": "127.0.0.1",
         "comfyui_port": 8188,
+        "setup_complete": False,
     },
     "audio": {
         "enabled": True,

@@ -26,7 +26,10 @@ from pathlib import Path
 from typing import Optional
 
 from kleinos.klein_app import KleinApp
-from kleinos.pipeline_client import ensure_on_path as _pipeline_ensure_on_path
+from kleinos.pipeline_client import (
+    ensure_on_path as _pipeline_ensure_on_path,
+    is_configured as _pipeline_is_configured,
+)
 
 try:
     from PIL import Image as _PilImage, ImageEnhance as _PilEnhance  # type: ignore[import-untyped]
@@ -130,13 +133,25 @@ class ImageGenPane(tk.Frame):
         self._filter_btns: dict[str, tk.Button] = {}
         self._pl_state     = "offline"   # "offline" | "starting" | "online" | "stopping"
         self._poll_after: Optional[str] = None
-        self._build()
-        # Initial async ping; don't block UI on startup
-        threading.Thread(target=self._async_poll, daemon=True).start()
+
+        if not _pipeline_is_configured():
+            self._show_setup_gate()
+        else:
+            self._build_main()
+
+    def _show_setup_gate(self) -> None:
+        from kleinos.pipeline_setup import PipelineSetupPane
+        gate = PipelineSetupPane(self, on_complete=self._on_setup_complete)
+        gate.pack(fill="both", expand=True)
+
+    def _on_setup_complete(self) -> None:
+        for child in self.winfo_children():
+            child.destroy()
+        self._build_main()
 
     # ── Layout ────────────────────────────────────────────────────────
 
-    def _build(self) -> None:
+    def _build_main(self) -> None:
         # Header + pipeline status bar on one row
         hdr = tk.Frame(self, bg=_HDR_BG)
         hdr.pack(fill="x")
@@ -239,8 +254,9 @@ class ImageGenPane(tk.Frame):
         self._canvas.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self._canvas.bind("<Configure>", self._on_resize)
 
-        # Apply initial disabled state
+        # Apply initial disabled state, then kick off async ping
         self._apply_pl_state()
+        threading.Thread(target=self._async_poll, daemon=True).start()
 
     # ── Pipeline state machine ────────────────────────────────────────
 

@@ -56,6 +56,32 @@ def convert_available() -> bool:
         return False
 
 
+# ── Setup gate ───────────────────────────────────────────────────────
+
+def is_configured() -> bool:
+    """
+    True when the user has completed the pipeline setup gate at least once.
+    Does NOT mean ComfyUI is currently running — only that the user has
+    made an explicit choice about how to use the pipeline.
+    """
+    try:
+        from kleinos import config as _cfg
+        return bool(_cfg.load().get("image_pipeline", {}).get("setup_complete", False))
+    except Exception:
+        return False
+
+
+def mark_configured() -> None:
+    """Persist setup_complete = True.  Called by PipelineSetupPane on save."""
+    try:
+        from kleinos import config as _cfg
+        cfg = _cfg.load()
+        cfg.setdefault("image_pipeline", {})["setup_complete"] = True
+        _cfg.save(cfg)
+    except Exception:
+        pass
+
+
 # ── Path setup ────────────────────────────────────────────────────────
 
 def ensure_on_path() -> bool:
