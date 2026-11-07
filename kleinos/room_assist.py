@@ -1,12 +1,11 @@
 """
 kleinos/room_assist.py
 
-Task 4 — Conversational Room Assistant for the World Builder.
+Narrative conversation panel + per-field AI generation for the World Builder.
 
-Mention system:  type <room name or id> in the chat and the assistant
-automatically receives that room's full data plus its direct neighbors
-(rooms it exits to + rooms that exit into it).  The model can then
-suggest connections using real room IDs rather than invented ones.
+The chat panel is a free-form narrative space: the user builds up creative
+context about the room (story, mood, purpose).  Small "✦" buttons next to
+each form field use that narrative as a filter to generate the field value.
 
 Callbacks wired by KleinBuilderPane:
   get_snapshot()   -> dict   current form values (unsaved)
@@ -14,8 +13,10 @@ Callbacks wired by KleinBuilderPane:
   area_rooms()     -> list   rooms in the same area (for nearby context)
   all_rooms()      -> list   every room in the world (for mention resolution)
 
-UI:
-  reset_chat()   call when the user switches to a different room
+Public interface:
+  reset_chat()           clear narrative; call when user switches room
+  generate_field(name)   run per-field inference from narrative context
+  generate_all_fields()  chain all per-field inferences in sequence
 """
 from __future__ import annotations
 
@@ -25,9 +26,8 @@ import re
 import sys
 import threading
 import tkinter as tk
-from copy import deepcopy
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 _KB_ROOT = Path(__file__).resolve().parent.parent
 if str(_KB_ROOT) not in sys.path:
@@ -40,46 +40,64 @@ _DIM    = "#005500"
 _HDR_BG = "#001a00"
 _WARN   = "#cc6600"
 _BRIGHT = "#00ff66"
-_MENTION = "#00aaff"   # resolved mention highlight
 
-_OLLAMA_HOST  = "127.0.0.1"
-_OLLAMA_PORT  = 11434
-_ASSIST_MODEL = "qwen2.5:3b"
-_MAX_TOKENS   = 600
-_WINDOW_SIZE  = 6
+_OLLAMA_HOST = "127.0.0.1"
+_OLLAMA_PORT = 11434
+_NARR_MODEL  = "qwen2.5:7b"   # narrative conversation
+_FIELD_MODEL = "qwen2.5:3b"   # per-field generation (fast)
+_WINDOW_SIZE = 6               # rolling window in exchanges
 
-_ALLOWED_UPDATES = {"name", "description", "environment", "objects"}
+_NARRATIVE_SYSTEM = """\
+You are a creative story collaborator helping a game designer conceive a room \
+for a text adventure game.
+Your job is to understand the narrative IDENTITY of this room through conversation.
 
-# ─── mention syntax: <anything here> ─────────────────────────────────
-_MENTION_RE = re.compile(r"<([^>]+)>")
-
-_SYSTEM_PROMPT = """\
-You are a room design assistant for a text adventure game.
-The user is editing a room and can ask you to modify it.
-
-CURRENT ROOM (live form, unsaved):
-{room_state}
-
+AREA: {area}
 NEARBY ROOMS IN THIS AREA:
 {nearby}
-{mention_block}\
-{summary_block}\
-You may ONLY suggest changes to: name, description, environment (weather/light/sound), objects.
-Never change id, area, or exits directly — exits are handled by the user.
-If the user asks to connect rooms, suggest the direction and the target room id from the referenced data.
 
-Respond ONLY with valid JSON, no markdown, no code fences:
-{{"reply": "conversational message", "updates": {{}}}}
+Help the user explore: What story does this room tell? What mood or atmosphere?
+What happened here? What purpose does it serve? Who uses it?
 
-Include changed fields in updates if appropriate. Use empty {{}} if just chatting.
-"""
+Keep responses to 2-3 sentences. Ask ONE focused creative question per reply.
+Do NOT generate form fields or JSON — this is pure creative exploration.
+{summary_block}"""
+
+_FIELD_PROMPTS: dict[str, str] = {
+    "name":        "Generate ONLY the room name (2–4 evocative words). No explanation.",
+    "description": (
+        "Generate ONLY the room description (2–3 evocative sentences "
+        "for a text adventure player). No explanation."
+    ),
+    "weather":     (
+        "Generate ONLY a short weather/atmosphere phrase "
+        "(e.g. 'bitter cold', 'humid and still'). "
+        "One phrase, no explanation. Empty string if irrelevant."
+    ),
+    "light":       (
+        "Generate ONLY a short lighting phrase "
+        "(e.g. 'dim candlelight', 'harsh fluorescent glow'). "
+        "One phrase, no explanation. Empty string if irrelevant."
+    ),
+    "sound":       (
+        "Generate ONLY a short ambient sound phrase "
+        "(e.g. 'distant dripping water', 'eerie silence'). "
+        "One phrase, no explanation. Empty string if irrelevant."
+    ),
+    "objects":     (
+        "Generate ONLY a JSON array of objects in this room. "
+        "Each object: {\"id\": \"snake_case\", \"name\": \"Name\", "
+        "\"kind\": \"item\", \"description\": \"...\"}. "
+        "Reply with valid JSON array only, no explanation. Can be []."
+    ),
+}
 
 
 # ── Ollama ────────────────────────────────────────────────────────────
 
-def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
+def _ollama_chat(messages: list[dict], model: str, max_tokens: int = 600) -> str:
     body = json.dumps({
-        "model": _ASSIST_MODEL,
+        "model": model,
         "messages": messages,
         "stream": False,
         "options": {"num_predict": max_tokens},
@@ -93,7 +111,7 @@ def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
         if resp.status != 200:
             if resp.status == 404:
                 raise RuntimeError(
-                    f"Model '{_ASSIST_MODEL}' not found — run: ollama pull {_ASSIST_MODEL}"
+                    f"Model '{model}' not found — run: ollama pull {model}"
                 )
             raise RuntimeError(f"Ollama returned HTTP {resp.status}")
         result = json.loads(data.decode("utf-8"))
@@ -102,128 +120,33 @@ def _ollama_chat(messages: list[dict], max_tokens: int = _MAX_TOKENS) -> str:
             raise RuntimeError("Ollama returned an empty response.")
         return content
     except (OSError, TimeoutError, http.client.HTTPException) as exc:
-        raise RuntimeError("Cannot reach Ollama (127.0.0.1:11434). Is it running?") from exc
+        raise RuntimeError(
+            "Cannot reach Ollama (127.0.0.1:11434). Is it running?"
+        ) from exc
     finally:
         conn.close()
 
 
 def _summarise(exchanges: list[dict]) -> str:
-    text = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in exchanges)
+    text = "\n".join(
+        f"{m['role'].capitalize()}: {m['content']}" for m in exchanges
+    )
     prompt = f"Summarise this conversation in one sentence:\n{text}"
     try:
-        return _ollama_chat([{"role": "user", "content": prompt}], max_tokens=80)
+        return _ollama_chat(
+            [{"role": "user", "content": prompt}],
+            model=_NARR_MODEL, max_tokens=80,
+        )
     except Exception:
         return "(earlier context omitted)"
-
-
-def _parse_response(raw: str) -> tuple[str, dict]:
-    text = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
-    start = text.find("{")
-    end   = text.rfind("}") + 1
-    if start == -1 or end == 0:
-        return raw, {}
-    try:
-        obj = json.loads(text[start:end])
-    except json.JSONDecodeError:
-        return raw, {}
-    reply   = str(obj.get("reply", raw))
-    updates = obj.get("updates", {})
-    if not isinstance(updates, dict):
-        updates = {}
-    return reply, {k: v for k, v in updates.items() if k in _ALLOWED_UPDATES}
-
-
-# ── Mention resolution ────────────────────────────────────────────────
-
-def _resolve_mention(query: str, rooms: list[dict]) -> Optional[dict]:
-    """Fuzzy-resolve a mention string to a room dict (or None)."""
-    q = query.strip().casefold()
-    # 1. exact ID
-    for r in rooms:
-        if r.get("id", "").casefold() == q:
-            return r
-    # 2. exact name
-    for r in rooms:
-        if r.get("name", "").casefold() == q:
-            return r
-    # 3. name starts with query
-    for r in rooms:
-        if r.get("name", "").casefold().startswith(q):
-            return r
-    # 4. name contains query
-    for r in rooms:
-        if q in r.get("name", "").casefold() or q in r.get("id", "").casefold():
-            return r
-    return None
-
-
-def _room_neighbors(room: dict, all_rooms: list[dict]) -> dict[str, dict]:
-    """
-    Return a dict of {room_id: room_dict} for direct neighbors:
-    rooms this room exits to + rooms that exit into this room.
-    """
-    rid = room.get("id", "")
-    room_index = {r["id"]: r for r in all_rooms}
-    neighbors: dict[str, dict] = {}
-
-    # Forward: rooms this room exits to
-    for target_id in room.get("exits", {}).values():
-        if target_id in room_index and target_id != rid:
-            neighbors[target_id] = room_index[target_id]
-
-    # Backward: rooms that have an exit pointing here
-    for r in all_rooms:
-        if r["id"] != rid and rid in r.get("exits", {}).values():
-            neighbors[r["id"]] = r
-
-    return neighbors
-
-
-def _format_mention_block(mentions: list[tuple[str, dict]], all_rooms: list[dict]) -> str:
-    """Build the REFERENCED ROOMS section for the system prompt."""
-    if not mentions:
-        return ""
-    lines = ["REFERENCED ROOMS (resolved from your <mentions>):"]
-    for query, room in mentions:
-        rid   = room.get("id", "?")
-        name  = room.get("name", rid)
-        desc  = room.get("description", "")[:120]
-        area  = room.get("area", "")
-        exits = room.get("exits", {})
-
-        lines.append(f"\n  <{query}> → \"{name}\" (id: {rid}, area: {area})")
-        if desc:
-            lines.append(f"    Description: {desc}{'…' if len(room.get('description','')) > 120 else ''}")
-        if exits:
-            exit_summary = ", ".join(f"{d}→{t}" for d, t in exits.items())
-            lines.append(f"    Exits: {exit_summary}")
-
-        neighbors = _room_neighbors(room, all_rooms)
-        if neighbors:
-            lines.append("    Neighbors:")
-            for nb in list(neighbors.values())[:4]:
-                nb_desc = nb.get("description", "")[:60]
-                lines.append(f"      {nb['id']}: \"{nb.get('name','')}\" — {nb_desc}")
-
-        # Back-links
-        back = [r for r in all_rooms if rid in r.get("exits", {}).values()
-                and r.get("id") != rid]
-        if back:
-            back_ids = ", ".join(r["id"] for r in back[:4])
-            lines.append(f"    Linked from: {back_ids}")
-
-    lines.append("")
-    return "\n".join(lines) + "\n"
 
 
 # ── RoomAssistPane ────────────────────────────────────────────────────
 
 class RoomAssistPane(tk.Frame):
     """
-    Chat panel mounted beside the Room Editor.
-
-    Type <room name> in a message to pull that room's data and neighbors
-    into the model's context for that exchange.
+    Narrative conversation panel.  Chat builds creative context; ✦ buttons
+    on the form use that context to generate individual field values.
     """
 
     def __init__(
@@ -244,8 +167,8 @@ class RoomAssistPane(tk.Frame):
 
         self._messages: list[dict] = []
         self._summary: str = ""
-        self._undo_snapshot: Optional[dict] = None
-        self._busy = False
+        self._busy     = False
+        self._gen_busy = False
 
         self._build()
 
@@ -254,9 +177,9 @@ class RoomAssistPane(tk.Frame):
     def _build(self) -> None:
         hdr = tk.Frame(self, bg=_HDR_BG)
         hdr.pack(fill="x")
-        tk.Label(hdr, text=" ASSIST ROOM ", bg=_HDR_BG, fg=_FG,
+        tk.Label(hdr, text=" NARRATIVE ", bg=_HDR_BG, fg=_FG,
                  font=("Consolas", 9, "bold")).pack(side="left", padx=8, pady=5)
-        tk.Button(hdr, text="Reset Chat", bg=_HDR_BG, fg=_DIM,
+        tk.Button(hdr, text="Reset", bg=_HDR_BG, fg=_DIM,
                   activebackground=_BG, activeforeground=_FG,
                   relief="flat", font=("Consolas", 8), cursor="hand2",
                   command=self.reset_chat).pack(side="right", padx=6)
@@ -269,11 +192,11 @@ class RoomAssistPane(tk.Frame):
             padx=6, pady=6,
         )
         self._history.pack(fill="both", expand=True, padx=4, pady=(4, 0))
-        self._history.tag_config("user",    foreground=_BRIGHT)
-        self._history.tag_config("assist",  foreground=_FG)
-        self._history.tag_config("system",  foreground=_DIM)
-        self._history.tag_config("updated", foreground=_WARN)
-        self._history.tag_config("mention", foreground=_MENTION)
+        self._history.bind("<MouseWheel>", lambda e: self._history.yview_scroll(int(-e.delta / 120), "units"))
+        self._history.tag_config("user",   foreground=_BRIGHT)
+        self._history.tag_config("assist", foreground=_FG)
+        self._history.tag_config("system", foreground=_DIM)
+        self._history.tag_config("gen",    foreground=_WARN)
 
         entry_row = tk.Frame(self, bg=_BG)
         entry_row.pack(fill="x", padx=4, pady=4)
@@ -295,31 +218,35 @@ class RoomAssistPane(tk.Frame):
         )
         self._send_btn.pack(side="left")
 
-        self._undo_btn = tk.Button(
-            self, text="Undo Last AI Update", bg=_BG, fg=_DIM,
-            activebackground=_HDR_BG, activeforeground=_FG,
-            relief="flat", font=("Consolas", 8), cursor="hand2",
-            state="disabled", command=self._undo,
-        )
-        self._undo_btn.pack(fill="x", padx=4, pady=(0, 4))
-
         self._append("system",
-                     "Chat to modify this room.  Mention other rooms with <name>.\n"
-                     "Changes apply to the form only — Save Room to persist.")
+                     "Build the room's narrative here.\n"
+                     "Use the ✦ buttons on the form to generate each field.")
 
     # ── Chat state ────────────────────────────────────────────────────
 
     def reset_chat(self) -> None:
         self._messages = []
         self._summary  = ""
-        self._undo_snapshot = None
-        self._undo_btn.configure(state="disabled")
         self._history.configure(state="normal")
         self._history.delete("1.0", "end")
         self._history.configure(state="disabled")
-        self._append("system", "Chat reset. Form values unchanged.")
+        self._append("system", "Narrative cleared.")
 
-    # ── Send / receive ────────────────────────────────────────────────
+    # ── Narrative context (exposed for field generation) ──────────────
+
+    def get_narrative(self) -> str:
+        """Return the full conversation history as a formatted string."""
+        if not self._messages:
+            return "(no narrative yet)"
+        lines = []
+        if self._summary:
+            lines.append(f"[Earlier context: {self._summary}]")
+        for m in self._messages:
+            role = "User" if m["role"] == "user" else "AI"
+            lines.append(f"{role}: {m['content']}")
+        return "\n".join(lines)
+
+    # ── Narrative chat ────────────────────────────────────────────────
 
     def _send(self) -> None:
         prompt = self._prompt_var.get().strip()
@@ -328,79 +255,51 @@ class RoomAssistPane(tk.Frame):
         self._prompt_var.set("")
         self._busy = True
         self._send_btn.configure(state="disabled")
-        self._append_user_with_mentions(prompt)
+        self._append("user", prompt)
         threading.Thread(target=self._worker, args=(prompt,), daemon=True).start()
 
     def _worker(self, prompt: str) -> None:
         try:
-            snapshot   = self._get_snapshot()
-            area_list  = self._area_rooms()
-            all_rooms  = self._all_rooms()
+            snapshot  = self._get_snapshot()
+            area_list = self._area_rooms()
 
-            # Resolve mentions in the user's message
-            mentions   = self._extract_mentions(prompt, all_rooms)
+            nearby_parts = []
+            for r in area_list[:5]:
+                if r.get("id") == snapshot.get("id"):
+                    continue
+                nearby_parts.append(
+                    f"  {r['id']}: {r.get('name','')} — "
+                    f"{r.get('description','')[:60]}"
+                )
+            nearby = "\n".join(nearby_parts) or "  (none)"
 
-            system_msg = self._build_system(snapshot, area_list, all_rooms, mentions)
-            messages   = [{"role": "system", "content": system_msg}]
+            summary_block = (
+                f"EARLIER CONTEXT:\n{self._summary}\n\n"
+                if self._summary else ""
+            )
+            system = _NARRATIVE_SYSTEM.format(
+                area=snapshot.get("area", "unknown"),
+                nearby=nearby,
+                summary_block=summary_block,
+            )
+
+            messages = [{"role": "system", "content": system}]
             messages.extend(self._messages)
             messages.append({"role": "user", "content": prompt})
 
-            raw = _ollama_chat(messages)
-            reply, updates = _parse_response(raw)
+            reply = _ollama_chat(messages, model=_NARR_MODEL)
 
-            self._messages.append({"role": "user",     "content": prompt})
-            self._messages.append({"role": "assistant","content": raw})
+            self._messages.append({"role": "user",      "content": prompt})
+            self._messages.append({"role": "assistant", "content": reply})
             self._roll_window()
 
-            if updates:
-                self.after(0, lambda u=updates, s=deepcopy(snapshot):
-                           self._apply_safe(u, s))
-            self.after(0, lambda r=reply, m=mentions: self._on_reply(r, bool(updates), m))
+            self.after(0, lambda r=reply: self._append("assist", r))
 
         except Exception as exc:
             self.after(0, lambda: self._append("system", f"Error: {exc}"))
         finally:
             self._busy = False
             self.after(0, lambda: self._send_btn.configure(state="normal"))
-
-    def _on_reply(self, reply: str, had_updates: bool,
-                  mentions: list[tuple[str, dict]]) -> None:
-        self._append("assist", reply)
-        if mentions:
-            names = ", ".join(f"<{q}>" for q, _ in mentions)
-            self._append("mention", f"↳ context pulled: {names}")
-        if had_updates:
-            self._append("updated", "↑ Applied to form. Click Save Room to keep.")
-
-    def _apply_safe(self, updates: dict, prev_snapshot: dict) -> None:
-        self._undo_snapshot = prev_snapshot
-        self._apply_updates(updates)
-        self._undo_btn.configure(state="normal")
-
-    def _undo(self) -> None:
-        if self._undo_snapshot is None:
-            return
-        self._apply_updates(self._undo_snapshot)
-        self._append("system", "Reverted to form state before last AI update.")
-        self._undo_snapshot = None
-        self._undo_btn.configure(state="disabled")
-
-    # ── Mention helpers ───────────────────────────────────────────────
-
-    def _extract_mentions(self, text: str,
-                          all_rooms: list[dict]) -> list[tuple[str, dict]]:
-        """Return [(query, room_dict)] for each resolved <mention> in text."""
-        seen: set[str] = set()
-        result = []
-        for m in _MENTION_RE.finditer(text):
-            query = m.group(1).strip()
-            if query.casefold() in seen:
-                continue
-            seen.add(query.casefold())
-            room = _resolve_mention(query, all_rooms)
-            if room:
-                result.append((query, room))
-        return result
 
     # ── Rolling window ────────────────────────────────────────────────
 
@@ -414,58 +313,108 @@ class RoomAssistPane(tk.Frame):
             except Exception:
                 pass
 
-    # ── Context building ──────────────────────────────────────────────
+    # ── Per-field generation ──────────────────────────────────────────
 
-    def _build_system(self, snapshot: dict, area_rooms: list,
-                      all_rooms: list, mentions: list[tuple[str, dict]]) -> str:
-        room_state = json.dumps({
-            k: snapshot[k]
-            for k in ("id", "name", "area", "description", "environment", "objects")
-            if k in snapshot
-        }, ensure_ascii=False, indent=2)
+    def generate_field(self, field_name: str) -> None:
+        """Generate a single field using the narrative as context."""
+        if self._gen_busy:
+            self._append("gen", "✦ busy — wait for current generation to finish.")
+            return
+        self._gen_busy = True
+        threading.Thread(target=self._gen_worker,
+                         args=(field_name,), daemon=True).start()
 
-        nearby_parts = []
-        for r in area_rooms[:6]:
-            if r.get("id") == snapshot.get("id"):
-                continue
-            nearby_parts.append(
-                f"  {r['id']}: {r.get('name','')} — {r.get('description','')[:80]}"
-            )
-        nearby = "\n".join(nearby_parts) or "  (none)"
+    def generate_all_fields(self) -> None:
+        """Chain generation of all fields in sequence."""
+        if self._gen_busy:
+            self._append("gen", "✦ busy — wait for current generation to finish.")
+            return
+        self._gen_busy = True
+        fields = ["name", "description", "weather", "light", "sound", "objects"]
+        threading.Thread(target=self._gen_all_worker,
+                         args=(fields,), daemon=True).start()
 
-        mention_block = _format_mention_block(mentions, all_rooms)
-        summary_block = (f"EARLIER CONVERSATION SUMMARY:\n{self._summary}\n\n"
-                         if self._summary else "")
+    def _build_field_messages(self, field_name: str) -> list[dict]:
+        snapshot  = self._get_snapshot()
+        area_list = self._area_rooms()
+        nearby_parts = [
+            f"  {r['id']}: {r.get('name','')}"
+            for r in area_list[:5]
+            if r.get("id") != snapshot.get("id")
+        ]
+        nearby    = "\n".join(nearby_parts) or "  (none)"
+        narrative = self.get_narrative()
+        instruction = _FIELD_PROMPTS.get(field_name, f"Generate only the {field_name}.")
 
-        return _SYSTEM_PROMPT.format(
-            room_state=room_state,
-            nearby=nearby,
-            mention_block=mention_block,
-            summary_block=summary_block,
+        system = (
+            f"You are generating room data for a text adventure game.\n"
+            f"Area: {snapshot.get('area', 'unknown')}\n"
+            f"Nearby rooms:\n{nearby}\n\n"
+            f"NARRATIVE CONTEXT (creative conversation about this room):\n"
+            f"{narrative}\n\n"
+            f"{instruction}"
         )
+        return [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": f"Generate the {field_name}."},
+        ]
+
+    def _gen_worker(self, field_name: str) -> None:
+        try:
+            messages = self._build_field_messages(field_name)
+            raw = _ollama_chat(messages, model=_FIELD_MODEL, max_tokens=300)
+            self.after(0, lambda r=raw, f=field_name: self._apply_field(f, r))
+        except Exception as exc:
+            self.after(0, lambda: self._append(
+                "gen", f"✦ {field_name}: error — {exc}"))
+        finally:
+            self._gen_busy = False
+
+    def _gen_all_worker(self, fields: list[str]) -> None:
+        try:
+            for field in fields:
+                self.after(0, lambda f=field:
+                           self._append("gen", f"✦ generating {f}…"))
+                try:
+                    messages = self._build_field_messages(field)
+                    raw = _ollama_chat(messages, model=_FIELD_MODEL, max_tokens=300)
+                    self.after(0, lambda r=raw, f=field: self._apply_field(f, r))
+                except Exception as exc:
+                    self.after(0, lambda f=field, e=exc:
+                               self._append("gen", f"✦ {f}: error — {e}"))
+        finally:
+            self._gen_busy = False
+
+    def _apply_field(self, field_name: str, raw: str) -> None:
+        if field_name == "objects":
+            cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
+            start = cleaned.find("[")
+            end   = cleaned.rfind("]") + 1
+            if start != -1 and end > 0:
+                try:
+                    value: object = json.loads(cleaned[start:end])
+                except json.JSONDecodeError:
+                    self._append(
+                        "gen",
+                        f"✦ objects: could not parse JSON — {cleaned[:60]}"
+                    )
+                    return
+            else:
+                value = []
+            self._apply_updates({"objects": value})
+        elif field_name in ("weather", "light", "sound"):
+            self._apply_updates({"environment": {field_name: raw.strip().strip('"')}})
+        else:
+            self._apply_updates({field_name: raw.strip().strip('"')})
+        self._append("gen", f"✦ {field_name} written to form.")
 
     # ── History display ───────────────────────────────────────────────
 
     def _append(self, role: str, text: str) -> None:
-        prefix = {"user": "You: ", "assist": "AI:  ",
-                  "system": "", "updated": "", "mention": "  "}.get(role, "")
+        prefix = {
+            "user": "You: ", "assist": "AI:  ", "system": "", "gen": "",
+        }.get(role, "")
         self._history.configure(state="normal")
         self._history.insert("end", prefix + text + "\n\n", role)
-        self._history.see("end")
-        self._history.configure(state="disabled")
-
-    def _append_user_with_mentions(self, text: str) -> None:
-        """Display user message with <mentions> highlighted in a distinct colour."""
-        self._history.configure(state="normal")
-        self._history.insert("end", "You: ", "user")
-        last = 0
-        for m in _MENTION_RE.finditer(text):
-            if m.start() > last:
-                self._history.insert("end", text[last:m.start()], "user")
-            self._history.insert("end", m.group(0), "mention")
-            last = m.end()
-        if last < len(text):
-            self._history.insert("end", text[last:], "user")
-        self._history.insert("end", "\n\n")
         self._history.see("end")
         self._history.configure(state="disabled")

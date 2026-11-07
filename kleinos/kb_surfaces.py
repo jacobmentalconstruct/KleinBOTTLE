@@ -163,8 +163,10 @@ class KleinBuilderPane(tk.Frame):
             )
             assist.pack(fill="both", expand=True)
 
-            # Wire room-switch reset
-            surface.on_room_changed = assist.reset_chat
+            # Wire room-switch reset + AI field generation
+            surface.on_room_changed      = assist.reset_chat
+            surface.generate_btn_callback = assist.generate_field
+            surface.generate_all_callback = assist.generate_all_fields
 
         except Exception as exc:
             self._error(str(exc))
@@ -312,6 +314,12 @@ class _WorldSelectScreen(tk.Frame):
 
         inner = tk.Frame(canvas, bg=_BG)
         win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _scroll(event):
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        canvas.bind("<MouseWheel>", _scroll)
+        inner.bind("<MouseWheel>", _scroll)
 
         def _resize(event):
             canvas.configure(scrollregion=canvas.bbox("all"))

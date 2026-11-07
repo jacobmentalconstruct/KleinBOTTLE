@@ -27,6 +27,8 @@ class BuilderSurface(ttk.Frame):
         self.world_name = tk.StringVar(value=builder.world["name"])
         self.start_room = tk.StringVar(value=builder.world["start_room"] or "")
         self.on_room_changed: Optional[Callable] = None
+        self.generate_btn_callback: Optional[Callable[[str], None]] = None
+        self.generate_all_callback: Optional[Callable[[], None]] = None
         # A surface is hosted by the application shell (Notebook); do not pack it here.
         self._build()
         self.refresh_tree()
@@ -52,6 +54,8 @@ class BuilderSurface(ttk.Frame):
         self.tree = ttk.Treeview(nav, show="tree", selectmode="browse")
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._select_room)
+        self.tree.bind("<Button-3>", self._show_tree_menu)
+        self.tree.bind("<MouseWheel>", lambda e: self.tree.yview_scroll(int(-e.delta / 120), "units"))
         controls = ttk.Frame(nav)
         controls.pack(fill="x", pady=7)
         ttk.Button(controls, text="New Room", command=self.new_room).pack(side="left", padx=2)
@@ -70,14 +74,23 @@ class BuilderSurface(ttk.Frame):
             entry.pack(anchor="w")
             if key == "id":
                 self.id_entry = entry
-        ttk.Label(content, text="Description").pack(anchor="w", pady=(7, 2))
+            if key == "name":
+                ttk.Button(part, text="✦", width=3,
+                           command=lambda: self._gen_field("name")).pack(anchor="w", pady=(2, 0))
+        desc_hdr = ttk.Frame(content)
+        desc_hdr.pack(fill="x", pady=(7, 2))
+        ttk.Label(desc_hdr, text="Description").pack(side="left")
+        ttk.Button(desc_hdr, text="✦", width=3,
+                   command=lambda: self._gen_field("description")).pack(side="left", padx=4)
         self.description = tk.Text(content, height=4, wrap="word", undo=True)
         style_text(self.description, font=FONT_UI)
         self.description.pack(fill="x")
+        self.description.bind("<MouseWheel>", lambda e: self.description.yview_scroll(int(-e.delta / 120), "units"))
         ttk.Label(content, text="Exits — one per line: direction:room_id").pack(anchor="w", pady=(9, 2))
         self.exits = tk.Text(content, height=4, wrap="none", undo=True)
         style_text(self.exits)
         self.exits.pack(fill="x")
+        self.exits.bind("<MouseWheel>", lambda e: self.exits.yview_scroll(int(-e.delta / 120), "units"))
 
         environment = ttk.LabelFrame(content, text="Environment — optional text values")
         environment.pack(fill="x", pady=(9, 2))
@@ -86,16 +99,24 @@ class BuilderSurface(ttk.Frame):
             part.pack(side="left", padx=6, pady=5)
             ttk.Label(part, text=title).pack(anchor="w")
             ttk.Entry(part, textvariable=self.vars[key], width=22).pack()
+            ttk.Button(part, text="✦", width=3,
+                       command=lambda k=key: self._gen_field(k)).pack(anchor="w", pady=(2, 0))
 
-        ttk.Label(content, text="Objects — JSON array (or use Add Object)").pack(anchor="w", pady=(8, 2))
+        obj_hdr = ttk.Frame(content)
+        obj_hdr.pack(fill="x", pady=(8, 2))
+        ttk.Label(obj_hdr, text="Objects — JSON array (or use Add Object)").pack(side="left")
+        ttk.Button(obj_hdr, text="✦", width=3,
+                   command=lambda: self._gen_field("objects")).pack(side="left", padx=4)
         self.objects = tk.Text(content, height=7, wrap="none", undo=True)
         style_text(self.objects)
         self.objects.pack(fill="both", expand=True)
+        self.objects.bind("<MouseWheel>", lambda e: self.objects.yview_scroll(int(-e.delta / 120), "units"))
         row = ttk.Frame(content)
         row.pack(fill="x", pady=(8, 3))
         ttk.Button(row, text="Add Object...", command=self.add_object).pack(side="left")
         ttk.Button(row, text="Edit Object...", command=self.edit_object).pack(side="left", padx=8)
         ttk.Button(row, text="Full Room JSON...", command=self.edit_room_json).pack(side="left", padx=8)
+        ttk.Button(row, text="Fill All ✦", command=self._gen_all_fields).pack(side="right", padx=8)
         ttk.Button(row, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
         self.status = tk.StringVar(value="Ready")
         ttk.Label(self, textvariable=self.status, anchor="w", style="Status.TLabel").pack(fill="x", pady=(8, 0))
@@ -488,6 +509,60 @@ class BuilderSurface(ttk.Frame):
     def all_rooms(self) -> list:
         """Return all rooms in the world."""
         return self.builder.rooms()
+
+    # ── Tree context menu ─────────────────────────────────────────────
+
+    def _show_tree_menu(self, event: tk.Event) -> None:
+        item = self.tree.identify_row(event.y)
+        if not item or not item.startswith("room:"):
+            return
+        room_id = item.removeprefix("room:")
+        try:
+            room = self.builder.room(room_id)
+        except Exception:
+            return
+        name = room.get("name", room_id)
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(
+            label=f"Add room off \"{name}\"",
+            command=lambda: self._add_room_off(room_id, room),
+        )
+        menu.add_separator()
+        menu.add_command(label="Delete room", command=self.delete_room)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _add_room_off(self, parent_id: str, parent_room: dict) -> None:
+        """Blank the form for a new room pre-wired back to parent_id."""
+        if not self._guard_unsaved():
+            return
+        self.selected_id = None
+        self._refreshing = True
+        self.tree.selection_remove(*self.tree.selection())
+        self._refreshing = False
+        area = parent_room.get("area", "Ungrouped")
+        self._populate({
+            "id": "", "name": "", "area": area, "description": "",
+            "exits": {}, "environment": {}, "objects": [],
+        }, existing=False)
+        self._set_text(self.exits, f"direction:{parent_id}")
+        self._saved_signature = self._form_signature()
+        parent_name = parent_room.get("name", parent_id)
+        self.status.set(
+            f"New room — type an ID, replace 'direction' with the exit back to '{parent_name}'"
+        )
+        self.id_entry.focus_set()
+        if self.on_room_changed:
+            self.on_room_changed()
+
+    # ── AI field-generation hooks ─────────────────────────────────────
+
+    def _gen_field(self, field_name: str) -> None:
+        if self.generate_btn_callback:
+            self.generate_btn_callback(field_name)
+
+    def _gen_all_fields(self) -> None:
+        if self.generate_all_callback:
+            self.generate_all_callback()
 
     def export_world(self) -> None:
         path = filedialog.asksaveasfilename(parent=self, defaultextension=".json", filetypes=[("JSON", "*.json")],
