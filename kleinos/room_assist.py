@@ -33,13 +33,11 @@ _KB_ROOT = Path(__file__).resolve().parent.parent
 if str(_KB_ROOT) not in sys.path:
     sys.path.insert(0, str(_KB_ROOT))
 
-_BG     = "#010a01"
-_BORDER = "#003300"
-_FG     = "#00cc33"
-_DIM    = "#005500"
-_HDR_BG = "#001a00"
-_WARN   = "#cc6600"
-_BRIGHT = "#00ff66"
+from kleinos.palette import (  # noqa: E402
+    BG as _BG, BORDER as _BORDER, FG_ON as _FG, FG_DIM as _DIM,
+    HEAD as _HDR_BG, FG_HI as _BRIGHT,
+)
+_WARN = "#cc6600"  # warning/accent orange — no palette token yet
 
 _OLLAMA_HOST = "127.0.0.1"
 _OLLAMA_PORT = 11434

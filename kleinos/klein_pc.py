@@ -485,7 +485,7 @@ class KleinPC:
         if hasattr(item, "create"):
             if isinstance(item, KleinGame):
                 self._set_sidebar_enabled(False)
-                def _game_exit(self=self):
+                def _game_exit():
                     self._set_sidebar_enabled(True)
                     self._select_terminal()
                 self._swap(lambda i=item: i.create(self._content, on_exit=_game_exit))  # type: ignore[attr-defined]

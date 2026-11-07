@@ -127,7 +127,7 @@ class PromoteToMainTests(unittest.TestCase):
 
         with patch("kleinos.world_library.MAIN_WORLD", main), \
              patch("kleinos.world_library.LIBRARY_DIR", lib):
-            with self.assertRaises((WorldLibraryError, Exception)):
+            with self.assertRaises(WorldLibraryError):
                 promote_to_main(source)
 
         self.assertEqual(main.read_bytes(), original)

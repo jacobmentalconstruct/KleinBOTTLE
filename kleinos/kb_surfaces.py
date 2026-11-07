@@ -20,6 +20,7 @@ Task 4 — Room Assistant:
 """
 from __future__ import annotations
 
+import json
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -34,17 +35,12 @@ if _KB_SRC not in sys.path:
 
 from kleinos.world_library import (  # noqa: E402
     MAIN_WORLD, WIP_WORLD,
-    WorldLibraryError,
     ensure_wip, list_library, promote_to_main, save_snapshot,
 )
-
-_BG     = "#010a01"
-_BORDER = "#003300"
-_FG     = "#00cc33"
-_DIM    = "#005500"
-_HDR_BG = "#001a00"
-_BRIGHT = "#00ff55"
-_WARN   = "#cc6600"
+from kleinos.palette import (  # noqa: E402
+    BG as _BG, BORDER as _BORDER, FG_ON as _FG, FG_DIM as _DIM,
+    HEAD as _HDR_BG, FG_PROMPT as _BRIGHT, FG_HUD as _WARN,
+)
 
 
 def _ensure_path() -> None:
@@ -351,8 +347,7 @@ class _WorldSelectScreen(tk.Frame):
         row = tk.Frame(parent, bg=_BG)
         row.pack(fill="x", padx=8, pady=2)
         try:
-            import json as _json
-            world_name = _json.loads(path.read_text(encoding="utf-8")).get("name") or label or path.stem
+            world_name = json.loads(path.read_text(encoding="utf-8")).get("name") or label or path.stem
         except Exception:
             world_name = label or path.stem
 
@@ -390,17 +385,16 @@ class _WorldSelectScreen(tk.Frame):
             for w in self.winfo_children():
                 w.destroy()
             self._build()
-        except (WorldLibraryError, Exception) as exc:
+        except Exception as exc:
             messagebox.showerror("Cannot promote", str(exc), parent=self)
 
 
 # ── Title screen for in-PC game ───────────────────────────────────────
 
 class _KleinBOTTLETitleScreen(tk.Canvas):
-    _BG     = "#010a01"
-    _BRIGHT = "#00ff55"
-    _MID    = "#00aa33"
-    _DIM    = "#004d1a"
+    from kleinos.palette import (  # noqa: E402
+        BG as _BG, FG_PROMPT as _BRIGHT, FG_HUD as _MID, GM_DARK as _DIM
+    )
 
     def __init__(self, parent: tk.Widget, *, world_path: Path, on_exit: Callable):
         super().__init__(parent, bg=self._BG, highlightthickness=0)

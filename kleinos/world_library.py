@@ -62,8 +62,9 @@ def save_snapshot(name: str, source: Path = WIP_WORLD) -> Path:
         data = json.loads(dest.read_text(encoding="utf-8"))
         data["name"] = name.strip() or safe
         dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    except (json.JSONDecodeError, OSError, KeyError) as exc:
+        print(f"[world_library] save_snapshot: could not update name in {dest.name}: {exc}",
+              file=sys.stderr)
     return dest
 
 
