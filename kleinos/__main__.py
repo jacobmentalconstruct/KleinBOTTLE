@@ -23,6 +23,7 @@ from kleinos.kb_surfaces import WorldBuilder, TextAdventure, KleinAdventurePane
 from kleinos.adventure import TheShack
 from kleinos.mahisland import MAHisLAND
 from kleinos.image_gen_pane import ImageGenerator
+from kleinos.workspace_manager import WorkspaceManagerApp
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
 _SPLASH_PATH = _KB_ROOT / "assets" / "logos" / "klein-bottle-logo.jpg"
@@ -184,7 +185,7 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
             embedded_in=frame,
             on_exit=close_pc,
             scale=pc_scale,
-            apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp()],
+            apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp(), WorkspaceManagerApp()],
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
         )
