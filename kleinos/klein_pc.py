@@ -126,6 +126,7 @@ class KleinPC:
         layout_path: Path = _LAYOUT_PATH,
         embedded_in: Optional[tk.Frame] = None,
         on_exit: Optional[Callable[[], None]] = None,
+        scale: Optional[float] = None,
     ):
         _startup_cfg = _config.load()
         _audio.configure(_startup_cfg)
@@ -152,7 +153,7 @@ class KleinPC:
         else:
             self._sync_layout_with_pool()
 
-        _scale = _config._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
+        _scale = scale if scale is not None else _config._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
 
         if embedded_in is not None:
             # Embedded view-swap mode — no separate Toplevel

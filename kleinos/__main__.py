@@ -171,10 +171,21 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
         frame = tk.Frame(root, bg=_BG)
         frame.pack(fill="both", expand=True)
         _pc_frame.append(frame)
+
+        # Scale monitor to fill ~90% of the available screen,
+        # leaving room for the taskbar and window chrome.
+        # Natural widescreen monitor canvas: 760 × 480 (+ 20px pack padding each axis)
+        _NAT_W, _NAT_H = 760 + 20, 480 + 20
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        pc_scale = min(sw * 0.90 / _NAT_W, sh * 0.88 / _NAT_H)
+        pc_scale = max(0.65, min(pc_scale, 3.0))
+
         KleinPC(
             root,
             embedded_in=frame,
             on_exit=close_pc,
+            scale=pc_scale,
             apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp()],
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
