@@ -48,9 +48,30 @@ class BuilderSurface(ttk.Frame):
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True)
         nav = ttk.Frame(body, padding=4)
-        content = ttk.Frame(body, padding=6)
+
+        # Scrollable right panel ──────────────────────────────────────
+        right = ttk.Frame(body)
         body.add(nav, weight=1)
-        body.add(content, weight=3)
+        body.add(right, weight=3)
+
+        _canvas = tk.Canvas(right, highlightthickness=0)
+        _vsb = ttk.Scrollbar(right, orient="vertical", command=_canvas.yview)
+        _canvas.configure(yscrollcommand=_vsb.set)
+        _vsb.pack(side="right", fill="y")
+        _canvas.pack(side="left", fill="both", expand=True)
+
+        content = ttk.Frame(_canvas, padding=6)
+        _cwin  = _canvas.create_window((0, 0), window=content, anchor="nw")
+
+        content.bind("<Configure>",
+                     lambda _e: _canvas.configure(scrollregion=_canvas.bbox("all")))
+        _canvas.bind("<Configure>",
+                     lambda e: _canvas.itemconfigure(_cwin, width=e.width))
+        _canvas.bind("<MouseWheel>",
+                     lambda e: _canvas.yview_scroll(int(-e.delta / 120), "units"))
+        content.bind("<MouseWheel>",
+                     lambda e: _canvas.yview_scroll(int(-e.delta / 120), "units"))
+        self._editor_canvas = _canvas   # saved so child-scroll helper can reach it
 
         ttk.Label(nav, text="Areas / Rooms", style="Heading.TLabel").pack(anchor="w", pady=(0, 5))
         self.tree = ttk.Treeview(nav, show="tree", selectmode="browse")
@@ -124,6 +145,9 @@ class BuilderSurface(ttk.Frame):
         ttk.Button(row, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
         self.status = tk.StringVar(value="Ready")
         ttk.Label(self, textvariable=self.status, anchor="w", style="Status.TLabel").pack(fill="x", pady=(8, 0))
+
+        # Propagate scroll from frames/labels inside content to the canvas
+        self._wire_scroll(content)
 
     def _form_signature(self) -> tuple:
         return (tuple(self.vars[k].get() for k in ("id", "name", "area", "weather", "light", "sound")),
@@ -616,6 +640,17 @@ class BuilderSurface(ttk.Frame):
         self.id_entry.focus_set()
         if self.on_room_changed:
             self.on_room_changed()
+
+    # ── Scroll propagation ────────────────────────────────────────────
+
+    def _wire_scroll(self, widget: tk.Widget) -> None:
+        """Recursively bind MouseWheel on non-Text widgets to scroll the editor canvas."""
+        if not isinstance(widget, tk.Text):
+            widget.bind("<MouseWheel>",
+                        lambda e: self._editor_canvas.yview_scroll(
+                            int(-e.delta / 120), "units"))
+        for child in widget.winfo_children():
+            self._wire_scroll(child)
 
     # ── Auto-derive room ID from name ─────────────────────────────────
 
