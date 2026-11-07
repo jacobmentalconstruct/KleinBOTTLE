@@ -17,6 +17,7 @@ _PC_SIZES = {
     "small":  0.65,
     "medium": 1.0,
     "large":  1.3,
+    "xlarge": 1.6,
 }
 
 _DEFAULTS: dict = {

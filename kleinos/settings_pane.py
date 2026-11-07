@@ -176,7 +176,7 @@ class SettingsPane(tk.Frame):
 
         self._size_btns: dict[str, tk.Button] = {}
         current_size = self._cfg.get("pc_size", "medium")
-        for key, label in (("small", "Small  (65%)"), ("medium", "Medium  (100%)"), ("large", "Large  (130%)")):
+        for key, label in (("small", "Small  (65%)"), ("medium", "Medium  (100%)"), ("large", "Large  (130%)"), ("xlarge", "X-Large  (160%)")):
             is_sel = key == current_size
             btn = tk.Button(
                 parent,
@@ -296,8 +296,9 @@ class SettingsPane(tk.Frame):
         _config.save(self._cfg)
         for k, btn in self._size_btns.items():
             is_sel = k == key
+            _size_labels = {"small": "Small  (65%)", "medium": "Medium  (100%)", "large": "Large  (130%)", "xlarge": "X-Large  (160%)"}
             btn.configure(
-                text=f"{'● ' if is_sel else '○ '}{k.capitalize()+'  (65%)' if k=='small' else k.capitalize()+'  (100%)' if k=='medium' else k.capitalize()+'  (130%)'}",
+                text=f"{'● ' if is_sel else '○ '}{_size_labels.get(k, k.capitalize())}",
                 bg=_BTN_ACT if is_sel else _BTN_BG,
                 font=_FONT_B if is_sel else _FONT_SM,
             )
