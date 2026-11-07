@@ -22,7 +22,7 @@ _PALETTES: dict[str, dict[str, str]] = {
         BTN_DEL="#2a0808",   BTN_DEL_A="#4a1010",
         FG="#3a7a3a",        FG_ON="#00dd33",
         FG_HI="#88ff88",     FG_PROMPT="#00ff44",
-        FG_DIM="#1a4a1a",    FG_HUD="#00aa22",
+        FG_DIM="#1a4a1a",    FG_HUD="#00aa22",    WARN="#cc6600",
         SEP="#0a180a",
         GM_DARK="#004d18",   GM_MID="#00dd33",    GM_BRIGHT="#88ff88",
     ),
@@ -34,7 +34,7 @@ _PALETTES: dict[str, dict[str, str]] = {
         BTN_DEL="#2a0808",   BTN_DEL_A="#4a1010",
         FG="#9a6818",        FG_ON="#ffaa00",
         FG_HI="#ffd060",     FG_PROMPT="#ffcc00",
-        FG_DIM="#5a3e10",    FG_HUD="#cc8800",
+        FG_DIM="#5a3e10",    FG_HUD="#cc8800",    WARN="#ff4400",
         SEP="#180e00",
         GM_DARK="#553300",   GM_MID="#ffaa00",    GM_BRIGHT="#ffd060",
     ),
@@ -46,7 +46,7 @@ _PALETTES: dict[str, dict[str, str]] = {
         BTN_DEL="#2a0808",   BTN_DEL_A="#4a1010",
         FG="#606060",        FG_ON="#d0d0d0",
         FG_HI="#f0f0f0",     FG_PROMPT="#f8f8f8",
-        FG_DIM="#303030",    FG_HUD="#a0a0a0",
+        FG_DIM="#303030",    FG_HUD="#a0a0a0",    WARN="#cc8800",
         SEP="#0f0f0f",
         GM_DARK="#404040",   GM_MID="#d0d0d0",    GM_BRIGHT="#f0f0f0",
     ),
@@ -58,7 +58,7 @@ _PALETTES: dict[str, dict[str, str]] = {
         BTN_DEL="#2a0808",   BTN_DEL_A="#4a1010",
         FG="#3c5e9a",        FG_ON="#66aaff",
         FG_HI="#aaccff",     FG_PROMPT="#88ccff",
-        FG_DIM="#2a3c60",    FG_HUD="#4488cc",
+        FG_DIM="#2a3c60",    FG_HUD="#4488cc",    WARN="#cc8800",
         SEP="#000e1a",
         GM_DARK="#003366",   GM_MID="#66aaff",    GM_BRIGHT="#aaccff",
     ),
@@ -70,7 +70,7 @@ _PALETTES: dict[str, dict[str, str]] = {
         BTN_DEL="#2a0808",   BTN_DEL_A="#4a1010",
         FG="#b83030",        FG_ON="#ff4444",
         FG_HI="#ff9999",     FG_PROMPT="#ff6666",
-        FG_DIM="#681818",    FG_HUD="#cc2222",
+        FG_DIM="#681818",    FG_HUD="#cc2222",    WARN="#ff8800",
         SEP="#0f0000",
         GM_DARK="#550000",   GM_MID="#ff4444",    GM_BRIGHT="#ff9999",
     ),
@@ -109,6 +109,7 @@ FG_HI     = _a["FG_HI"]      # desaturated bright highlight
 FG_PROMPT = _a["FG_PROMPT"]  # pure bright (terminal prompt / input)
 FG_DIM    = _a["FG_DIM"]     # very dim text
 FG_HUD    = _a["FG_HUD"]     # HUD / score text
+WARN      = _a["WARN"]       # warning / accent (orange across all palettes)
 
 SEP       = _a["SEP"]        # sidebar separator lines
 

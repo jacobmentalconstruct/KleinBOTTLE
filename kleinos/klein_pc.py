@@ -495,6 +495,7 @@ class KleinPC:
             self._swap(lambda i=item: AppPane(self._content, app=i, on_exit=self._select_terminal))
 
     def _select_settings(self) -> None:
+        from kleinos import config as _config
         from kleinos.settings_pane import SettingsPane
         self._set_active(self._btn_settings)
         self._swap(lambda: SettingsPane(
@@ -504,6 +505,8 @@ class KleinPC:
             add_category=self._add_category,
             delete_category=self._delete_category,
             rename_category=self._rename_category,
+            cfg=_config.load(),
+            on_save=_config.save,
         ))
 
     # ──────────────────────────────────────────────────────────────────

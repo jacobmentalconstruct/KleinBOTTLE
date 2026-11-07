@@ -81,8 +81,8 @@ def list_library() -> list[dict]:
                 "path": p,
                 "mtime": p.stat().st_mtime,
             })
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[world_library] list_library: skipping {p.name}: {exc}", file=sys.stderr)
     return sorted(entries, key=lambda e: e["mtime"], reverse=True)
 
 

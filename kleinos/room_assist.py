@@ -35,9 +35,8 @@ if str(_KB_ROOT) not in sys.path:
 
 from kleinos.palette import (  # noqa: E402
     BG as _BG, BORDER as _BORDER, FG_ON as _FG, FG_DIM as _DIM,
-    HEAD as _HDR_BG, FG_HI as _BRIGHT,
+    HEAD as _HDR_BG, FG_HI as _BRIGHT, WARN as _WARN,
 )
-_WARN = "#cc6600"  # warning/accent orange — no palette token yet
 
 _OLLAMA_HOST = "127.0.0.1"
 _OLLAMA_PORT = 11434
@@ -324,8 +323,8 @@ class RoomAssistPane(tk.Frame):
             try:
                 new_summary = _summarise(oldest)
                 self._summary = (self._summary + " " + new_summary).strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[room_assist] _roll_window: summarise failed: {exc}", file=sys.stderr)
 
     # ── Per-field generation ──────────────────────────────────────────
 

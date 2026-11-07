@@ -39,7 +39,7 @@ from kleinos.world_library import (  # noqa: E402
 )
 from kleinos.palette import (  # noqa: E402
     BG as _BG, BORDER as _BORDER, FG_ON as _FG, FG_DIM as _DIM,
-    HEAD as _HDR_BG, FG_PROMPT as _BRIGHT, FG_HUD as _WARN,
+    HEAD as _HDR_BG, FG_PROMPT as _BRIGHT, WARN as _WARN,
 )
 
 

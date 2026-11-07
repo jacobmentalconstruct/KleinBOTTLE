@@ -11,7 +11,6 @@ import tkinter as tk
 from typing import Callable, Optional
 
 from kleinos import audio as _audio
-from kleinos import config as _config
 
 from kleinos.palette import (
     BG as _BG, CHROME as _CHROME, BORDER as _BORDER,
@@ -80,6 +79,8 @@ class SettingsPane(tk.Frame):
         add_category: Callable[[str], None],
         delete_category: Callable[[str], None],
         rename_category: Callable[[str, str], None],
+        cfg: dict,
+        on_save: Callable[[dict], None],
     ):
         super().__init__(parent, bg=_BG, bd=0, highlightthickness=0)
         self._on_exit = on_exit
@@ -87,7 +88,8 @@ class SettingsPane(tk.Frame):
         self._add_category = add_category
         self._delete_category = delete_category
         self._rename_category = rename_category
-        self._cfg = _config.load()
+        self._cfg = cfg
+        self._on_save = on_save
         self._status_var = tk.StringVar(value="")
         self._tab_frames: dict[str, tk.Frame] = {}
         self._tab_btns: dict[str, tk.Button] = {}
@@ -296,7 +298,7 @@ class SettingsPane(tk.Frame):
         if key == self._cfg.get("pc_size", "medium"):
             return
         self._cfg["pc_size"] = key
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         for k, btn in self._size_btns.items():
             is_sel = k == key
             _size_labels = {"small": "Small  (65%)", "medium": "Medium  (100%)", "large": "Large  (130%)", "xlarge": "X-Large  (160%)"}
@@ -311,7 +313,7 @@ class SettingsPane(tk.Frame):
         if key == current:
             return
         self._cfg["palette"] = key
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         for k, btn in self._palette_btns.items():
             is_sel = k == key
             color  = _PALETTE_COLORS[k]
@@ -344,7 +346,7 @@ class SettingsPane(tk.Frame):
             return
         cfg_pip = self._cfg.setdefault("image_pipeline", {})
         cfg_pip["path"] = folder
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         self._update_pipeline_status()
         self._status_var.set("Pipeline path saved.")
 
@@ -366,7 +368,7 @@ class SettingsPane(tk.Frame):
         cfg_pip = self._cfg.setdefault("image_pipeline", {})
         cfg_pip["github_url"] = url
         cfg_pip["path"] = ""  # empty → _pipeline_root() falls back to local install
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         self._status_var.set(f"Cloning to {local}…  (check terminal for progress)")
         try:
             subprocess.Popen(["git", "clone", url, str(local)])
@@ -428,7 +430,7 @@ class SettingsPane(tk.Frame):
         new_val = not bool(cfg_audio.get("enabled", True))
         cfg_audio["enabled"] = new_val
         _audio.set_enabled(new_val)
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         if self._master_btn:
             self._master_btn.configure(
                 text=self._toggle_text(new_val),
@@ -443,7 +445,7 @@ class SettingsPane(tk.Frame):
         new_val = not bool(sounds.get(key, True))
         sounds[key] = new_val
         _audio.set_sound(key, new_val)
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         btn = self._sound_btns.get(key)
         if btn:
             btn.configure(
@@ -539,7 +541,7 @@ class SettingsPane(tk.Frame):
         ocfg["port"]        = port
         ocfg["narr_model"]  = self._ollama_vars["narr_model"].get().strip()
         ocfg["field_model"] = self._ollama_vars["field_model"].get().strip()
-        _config.save(self._cfg)
+        self._on_save(self._cfg)
         self._status_var.set("Ollama settings saved — restart to apply.")
 
     # ── Navigation tab ───────────────────────────────────────────────
