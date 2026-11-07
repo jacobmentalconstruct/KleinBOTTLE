@@ -10,5 +10,6 @@
       "death": true,
       "tick": true
     }
-  }
+  },
+  "pc_size": "large"
 }

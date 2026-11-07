@@ -349,8 +349,12 @@ class GameSession:
                 environment=(), objects=(), actors=(), exits=(),
                 has_terminal=False, has_cat=False, has_ringing_phone=False,
             )
-        visible_objects = [o for o in room.get("objects", []) if not o.get("hidden", False)]
         visible_actors  = [a for a in room.get("actors", [])  if not a.get("hidden", False)]
+        actor_ids = {str(a.get("id", "")) for a in visible_actors}
+        visible_objects = [
+            o for o in room.get("objects", [])
+            if not o.get("hidden", False) and str(o.get("id", "")) not in actor_ids
+        ]
         env = tuple(
             (k.capitalize(), str(v))
             for k, v in room.get("environment", {}).items() if v

@@ -54,7 +54,6 @@ class GameSurface(tk.Frame):
         self._computer_window = None
         self._build()
         self.refresh_room()
-        self._show_response(session.world.get("name", "Adventure"))
 
     def set_computer_callback(self, cb: Callable) -> None:
         self._computer_cb = cb
@@ -163,10 +162,6 @@ class GameSurface(tk.Frame):
             tk.Label(sidebar, text=text, bg=_BG, fg=_DIM,
                      font=("Consolas", 8, "bold"), anchor="w").pack(anchor="w", pady=(8, 1))
 
-        hdr("LOCATION")
-        tk.Label(sidebar, textvariable=self.location, bg=_BG, fg=_FG,
-                 font=("Consolas", 9), anchor="w", justify="left",
-                 wraplength=180).pack(anchor="w", pady=(0, 4))
         hdr("EXITS")
         self.exit_frame = tk.Frame(sidebar, bg=_BG)
         self.exit_frame.pack(fill="x", pady=(0, 4))
@@ -403,5 +398,5 @@ class GameSurface(tk.Frame):
             self._show_response(f"Cannot reload world: {exc}")
             return
         self.refresh_room()
-        self._show_response(self.session.world.get("name", "Adventure"))
+        self._show_response("")
         self.entry.focus_set()
