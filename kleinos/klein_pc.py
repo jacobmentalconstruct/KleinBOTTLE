@@ -140,6 +140,7 @@ class KleinPC:
         self._active_btn: Optional[tk.Button] = None
         self._active_title: Optional[str] = None
         self._item_btns: dict[str, tk.Button] = {}
+        self._btn_back: Optional[tk.Button] = None
 
         # Title → item lookup
         self._item_pool: dict[str, object] = {}
@@ -274,8 +275,8 @@ class KleinPC:
         )
         if self._on_exit is not None:
             tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
-            self._nav_btn(sb, "← Back", self._on_exit,
-                          tooltip="Return to text adventure")
+            self._btn_back = self._nav_btn(sb, "← Back", self._on_exit,
+                                           tooltip="Return to text adventure")
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
         tk.Frame(sb, bg=_S_BG).pack(fill="both", expand=True)
 
@@ -452,6 +453,28 @@ class KleinPC:
     # Navigation
     # ──────────────────────────────────────────────────────────────────
 
+    def _set_sidebar_enabled(self, enabled: bool) -> None:
+        """Enable or disable all sidebar nav buttons (used while a game is active)."""
+        state = "normal" if enabled else "disabled"
+        for btn in [self._btn_terminal, self._btn_settings, self._btn_back]:
+            if btn is not None:
+                try:
+                    btn.configure(state=state)
+                except tk.TclError:
+                    pass
+        for btn in self._item_btns.values():
+            try:
+                btn.configure(state=state)
+            except tk.TclError:
+                pass
+        for cat in self._layout["categories"]:
+            toggle = cat.get("_toggle_btn")
+            if toggle is not None:
+                try:
+                    toggle.configure(state=state)
+                except tk.TclError:
+                    pass
+
     def _select_terminal(self) -> None:
         self._set_active(self._btn_terminal)
         self._swap(lambda: TerminalPane(self._content, executor=self._executor))
@@ -460,7 +483,14 @@ class KleinPC:
         btn = self._item_btns.get(item.title)  # type: ignore[attr-defined]
         self._set_active(btn, item.title)  # type: ignore[attr-defined]
         if hasattr(item, "create"):
-            self._swap(lambda i=item: i.create(self._content, on_exit=self._select_terminal))
+            if isinstance(item, KleinGame):
+                self._set_sidebar_enabled(False)
+                def _game_exit(self=self):
+                    self._set_sidebar_enabled(True)
+                    self._select_terminal()
+                self._swap(lambda i=item: i.create(self._content, on_exit=_game_exit))  # type: ignore[attr-defined]
+            else:
+                self._swap(lambda i=item: i.create(self._content, on_exit=self._select_terminal))  # type: ignore[attr-defined]
         else:
             self._swap(lambda i=item: AppPane(self._content, app=i, on_exit=self._select_terminal))
 

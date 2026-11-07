@@ -323,6 +323,7 @@ class MAHisLANDPane(tk.Canvas):
         self.bind("<Button-3>",   self._on_rclick)
         self.bind("<Escape>",     self._on_escape)
         self.bind("<MouseWheel>", self._on_scroll)
+        self.bind("<Enter>",      lambda e: self.focus_set())
         self.focus_set()
 
         self._tick_id: Optional[str] = None
@@ -416,6 +417,7 @@ class MAHisLANDPane(tk.Canvas):
             self._hotbar_sel = (self._hotbar_sel + 1) % 9
 
     def _on_lclick(self, event: tk.Event) -> None:
+        self.focus_set()
         if self._inv_open:
             self._handle_inv_click(event.x, event.y)
             return
