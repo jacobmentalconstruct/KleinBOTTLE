@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -1077,8 +1078,8 @@ class MAHisLANDPane(tk.Canvas):
         try:
             _SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
             _SAVE_PATH.write_text(json.dumps(data))
-        except Exception:  # DANGEROUS: game-save write failure silently lost — fix in T1
-            pass
+        except Exception as exc:
+            print(f"[mahisland] _save_game failed: {exc}", file=sys.stderr)
 
     def _load_game(self) -> None:
         try:

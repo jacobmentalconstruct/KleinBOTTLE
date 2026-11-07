@@ -218,6 +218,8 @@ class KleinAdventurePane(tk.Frame):
         self._session = None
         self._surface = None
         self._last_room_id: Optional[str] = None
+        self._poll_id: Optional[str] = None
+        self.bind("<Destroy>", self._on_destroy)
         try:
             _apply_theme(self)
             GameSurface, GameSession, WorldStore = _import_game()
@@ -244,6 +246,11 @@ class KleinAdventurePane(tk.Frame):
         if self._surface is not None:
             self._surface.set_computer_callback(cb)  # type: ignore[attr-defined]
 
+    def _on_destroy(self, _event: tk.Event) -> None:
+        if self._poll_id is not None:
+            self.after_cancel(self._poll_id)
+            self._poll_id = None
+
     def _poll_room(self) -> None:
         try:
             s = self._session
@@ -261,9 +268,10 @@ class KleinAdventurePane(tk.Frame):
                             room["description"],
                             room.get("area", ""),
                         )
-        except Exception:  # MEDIUM: room-poll errors hidden; loop keeps running — fix in T1
-            pass
-        self.after(400, self._poll_room)
+        except Exception as exc:
+            import sys
+            print(f"[kb_surfaces] _poll_room error: {exc}", file=sys.stderr)
+        self._poll_id = self.after(400, self._poll_room)
 
     def _error(self, msg: str) -> None:
         tk.Label(

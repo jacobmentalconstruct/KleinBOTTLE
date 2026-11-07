@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 from pathlib import Path
 
 _PATH = Path(__file__).resolve().parent.parent / "data" / "kleinos_config.json"
@@ -73,5 +74,5 @@ def save(cfg: dict) -> None:
             json.dumps(cfg, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-    except Exception:  # DANGEROUS: config changes silently lost — fix in T1
-        pass
+    except Exception as exc:
+        print(f"[kleinos.config] save failed: {exc}", file=sys.stderr)
