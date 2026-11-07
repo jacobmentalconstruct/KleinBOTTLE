@@ -24,9 +24,9 @@ from kleinos.adventure import TheShack
 from kleinos.mahisland import MAHisLAND
 from kleinos.palette import BG as _BG, GM_BRIGHT as _BRIGHT, GM_MID as _MID, FG_DIM as _DIM
 
-_SPLASH_PATH = _KB_ROOT / "data" / "splash.png"
-_SPLASH_W = 320   # max display width for splash
-_SPLASH_H = 240   # max display height for splash
+_SPLASH_PATH = _KB_ROOT / "assets" / "logos" / "klein-bottle-logo.jpg"
+_SPLASH_W = 540   # max display width for splash
+_SPLASH_H = 300   # max display height for splash
 
 try:
     from PIL import Image as _PilImage, ImageTk as _PilImageTk  # type: ignore[import-untyped]
@@ -47,11 +47,8 @@ def _make_splash_photo():
         iw, ih = img.size
         scale = min(_SPLASH_W / iw, _SPLASH_H / ih)
         nw, nh = int(iw * scale), int(ih * scale)
-        img   = img.resize((nw, nh), _NEAREST)
-        gray  = img.convert("L")
-        zeros = gray.point(lambda _: 0)
-        tinted = _PilImage.merge("RGB", (zeros, gray, zeros))  # type: ignore[union-attr]
-        return _PilImageTk.PhotoImage(tinted), nw, nh  # type: ignore[union-attr]
+        img = img.resize((nw, nh), _NEAREST)
+        return _PilImageTk.PhotoImage(img), nw, nh  # type: ignore[union-attr]
     except Exception:
         return None, 0, 0
 
@@ -112,23 +109,28 @@ class TitleScreen(tk.Canvas):
         cx, cy = w // 2, h // 2
 
         if self._splash_photo is not None:
-            img_top = cy - self._splash_nh - 80
+            title_y   = cy - 210
+            tagline_y = title_y + 55
+            img_top   = tagline_y + 25
+            prompt_y  = img_top + self._splash_nh + 35
+            self.create_text(cx, title_y,
+                             text="KleinBOTTLE",
+                             fill=_BRIGHT, font=("Consolas", 44, "bold"))
+            self.create_text(cx, tagline_y,
+                             text="A house.  A computer.  A world inside itself.",
+                             fill=_MID, font=("Consolas", 11))
             self.create_image(cx - self._splash_nw // 2, img_top,
                               anchor="nw", image=self._splash_photo)
-            title_y   = cy + 10
-            tagline_y = cy + 60
-            prompt_y  = cy + 100
         else:
             title_y   = cy - 70
             tagline_y = cy - 14
             prompt_y  = cy + 34
-
-        self.create_text(cx, title_y,
-                         text="KleinBOTTLE",
-                         fill=_BRIGHT, font=("Consolas", 44, "bold"))
-        self.create_text(cx, tagline_y,
-                         text="A house.  A computer.  A world inside itself.",
-                         fill=_MID, font=("Consolas", 11))
+            self.create_text(cx, title_y,
+                             text="KleinBOTTLE",
+                             fill=_BRIGHT, font=("Consolas", 44, "bold"))
+            self.create_text(cx, tagline_y,
+                             text="A house.  A computer.  A world inside itself.",
+                             fill=_MID, font=("Consolas", 11))
         if self._blink_visible:
             self.create_text(cx, prompt_y,
                              text="PRESS  ENTER",

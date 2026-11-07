@@ -48,6 +48,7 @@ class ObjectInfo:
     id: str
     name: str
     short_desc: str
+    description: str
     kind: str
 
 
@@ -56,6 +57,7 @@ class ActorInfo:
     id: str
     name: str
     short_desc: str
+    description: str
 
 
 @dataclass(frozen=True)
@@ -363,12 +365,14 @@ class GameSession:
             id=str(o.get("id", "")),
             name=_name(o),
             short_desc=str(o.get("short_desc") or ""),
+            description=str(o.get("description") or ""),
             kind=str(o.get("kind", "")),
         ) for o in visible_objects)
         actors = tuple(ActorInfo(
             id=str(a.get("id", "")),
             name=_name(a),
             short_desc=str(a.get("short_desc") or a.get("description") or ""),
+            description=str(a.get("description") or ""),
         ) for a in visible_actors)
         kinds = {o.kind.casefold() for o in objects}
         has_ringing = any(

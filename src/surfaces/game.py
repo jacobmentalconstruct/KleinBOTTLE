@@ -203,17 +203,15 @@ class GameSurface(tk.Frame):
         # Objects
         self._clear(self._objs_sec.inner)
         if snap.objects:
-            obj_wrap = max(80, self._canvas.winfo_width() - 194)
+            wrap = max(80, self._canvas.winfo_width() - 194)
             for obj in snap.objects:
-                row = tk.Frame(self._objs_sec.inner, bg=_BG)
-                row.pack(fill="x", pady=1)
-                tk.Label(row, text=obj.name, bg=_BG, fg=_FG,
-                         font=("Consolas", 9, "bold"), anchor="w",
-                         width=20).pack(side="left")
-                if obj.short_desc:
-                    tk.Label(row, text=f"— {obj.short_desc}", bg=_BG, fg=_DIM,
-                             font=("Consolas", 9), anchor="w", justify="left",
-                             wraplength=obj_wrap).pack(side="left", fill="x", expand=True)
+                self._make_expandable_row(
+                    self._objs_sec.inner,
+                    name=obj.name,
+                    short_desc=obj.short_desc,
+                    detail=obj.description,
+                    wrap=wrap,
+                )
             self._objs_sec.pack(fill="x", padx=4, pady=(3, 0))
         else:
             self._objs_sec.pack_forget()
@@ -221,19 +219,16 @@ class GameSurface(tk.Frame):
         # Actors / NPCs
         self._clear(self._actors_sec.inner)
         if snap.actors:
-            obj_wrap = max(80, self._canvas.winfo_width() - 194)
+            wrap = max(80, self._canvas.winfo_width() - 194)
             for actor in snap.actors:
-                row = tk.Frame(self._actors_sec.inner, bg=_BG)
-                row.pack(fill="x", pady=1)
-                tk.Label(row, text=actor.name, bg=_BG, fg=_FG,
-                         font=("Consolas", 9, "bold"), anchor="w",
-                         width=20).pack(side="left")
-                if actor.short_desc:
-                    # Trim to first sentence for the brief room view
-                    brief = actor.short_desc.split(".")[0].strip()
-                    tk.Label(row, text=f"— {brief}", bg=_BG, fg=_DIM,
-                             font=("Consolas", 9), anchor="w", justify="left",
-                             wraplength=obj_wrap).pack(side="left", fill="x", expand=True)
+                brief = actor.short_desc.split(".")[0].strip() if actor.short_desc else ""
+                self._make_expandable_row(
+                    self._actors_sec.inner,
+                    name=actor.name,
+                    short_desc=brief,
+                    detail=actor.description,
+                    wrap=wrap,
+                )
             self._actors_sec.pack(fill="x", padx=4, pady=(3, 0))
         else:
             self._actors_sec.pack_forget()
@@ -243,6 +238,59 @@ class GameSurface(tk.Frame):
 
         # Sidebar
         self._sync(snap)
+
+    def _make_expandable_row(
+        self, parent: tk.Frame, *, name: str, short_desc: str, detail: str, wrap: int
+    ) -> None:
+        """A clickable header row that toggles a detail panel below it."""
+        container = tk.Frame(parent, bg=_BG)
+        container.pack(fill="x", pady=1)
+
+        expanded = [False]
+
+        detail_frame = tk.Frame(parent, bg=_BG)
+        detail_lbl = tk.Label(
+            detail_frame, text=detail or "(no description)",
+            bg=_BG, fg=_FG, font=("Consolas", 9),
+            justify="left", anchor="nw", wraplength=wrap,
+        )
+        detail_lbl.pack(fill="x", padx=(18, 0), pady=(2, 4))
+
+        arrow_lbl = tk.Label(container, text="▶", bg=_BG, fg=_DIM,
+                             font=("Consolas", 9), cursor="hand2")
+        arrow_lbl.pack(side="left")
+
+        name_lbl = tk.Label(container, text=name, bg=_BG, fg=_FG,
+                            font=("Consolas", 9, "bold"), anchor="w",
+                            width=20, cursor="hand2")
+        name_lbl.pack(side="left")
+
+        if short_desc:
+            tk.Label(container, text=f"— {short_desc}", bg=_BG, fg=_DIM,
+                     font=("Consolas", 9), anchor="w", justify="left",
+                     wraplength=wrap, cursor="hand2").pack(side="left", fill="x", expand=True)
+
+        def toggle(_event=None) -> None:
+            if expanded[0]:
+                detail_frame.pack_forget()
+                arrow_lbl.configure(text="▶")
+            else:
+                detail_frame.pack(fill="x", after=container)
+                arrow_lbl.configure(text="▼")
+            expanded[0] = not expanded[0]
+
+        def on_enter(_event=None) -> None:
+            arrow_lbl.configure(fg=_FG)
+            name_lbl.configure(fg="#00ff66")
+
+        def on_leave(_event=None) -> None:
+            arrow_lbl.configure(fg=_DIM)
+            name_lbl.configure(fg=_FG)
+
+        for w in (arrow_lbl, name_lbl, container):
+            w.bind("<Button-1>", toggle)
+            w.bind("<Enter>", on_enter)
+            w.bind("<Leave>", on_leave)
 
     def _refresh_actions(self, snap: RoomSnapshot) -> None:
         self._clear(self._actions_inner)
