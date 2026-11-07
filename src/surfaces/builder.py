@@ -54,6 +54,12 @@ class BuilderSurface(ttk.Frame):
         body.add(nav, weight=1)
         body.add(right, weight=3)
 
+        # Sticky footer — always visible below the scrollable form
+        footer = ttk.Frame(right)
+        footer.pack(side="bottom", fill="x", padx=4, pady=(2, 2))
+        ttk.Button(footer, text="Fill All ✦", command=self._gen_all_fields).pack(side="right", padx=(4, 0))
+        ttk.Button(footer, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
+
         _canvas = tk.Canvas(right, highlightthickness=0)
         _vsb = ttk.Scrollbar(right, orient="vertical", command=_canvas.yview)
         _canvas.configure(yscrollcommand=_vsb.set)
@@ -141,8 +147,6 @@ class BuilderSurface(ttk.Frame):
         ttk.Button(row, text="Add Object...", command=self.add_object).pack(side="left")
         ttk.Button(row, text="Edit Object...", command=self.edit_object).pack(side="left", padx=8)
         ttk.Button(row, text="Full Room JSON...", command=self.edit_room_json).pack(side="left", padx=8)
-        ttk.Button(row, text="Fill All ✦", command=self._gen_all_fields).pack(side="right", padx=8)
-        ttk.Button(row, text="Save Room", style="Accent.TButton", command=self.save_room).pack(side="right")
         self.status = tk.StringVar(value="Ready")
         ttk.Label(self, textvariable=self.status, anchor="w", style="Status.TLabel").pack(fill="x", pady=(8, 0))
 

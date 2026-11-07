@@ -149,30 +149,31 @@ class TitleScreen(tk.Canvas):
 
 # ── PC factory + surface patching ────────────────────────────────────
 
-def _make_pc(root: tk.Tk) -> KleinPC:
-    return KleinPC(
-        root,
-        apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp()],
-        games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
-        title="KleinBOTTLE PC",
-    )
-
-
 def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
-    """Replace GameSurface._open_computer to launch our full KleinPC."""
-    _pc: list[KleinPC] = []
+    """Replace GameSurface._open_computer to swap view to embedded KleinPC."""
+    _pc_frame: list[tk.Frame] = []
+
+    def close_pc() -> None:
+        if _pc_frame:
+            _pc_frame[0].destroy()
+            _pc_frame.clear()
+        pane.pack(fill="both", expand=True)
 
     def open_kleinpc() -> None:
-        if _pc:
-            try:
-                if _pc[0]._window.winfo_exists():
-                    _pc[0].show()
-                    return
-            except tk.TclError:
-                pass
-            _pc.clear()
-        _pc.append(_make_pc(root))
-        _pc[0].show()
+        if _pc_frame:
+            return  # already open
+        pane.pack_forget()
+        frame = tk.Frame(root, bg=_BG)
+        frame.pack(fill="both", expand=True)
+        _pc_frame.append(frame)
+        KleinPC(
+            root,
+            embedded_in=frame,
+            on_exit=close_pc,
+            apps=[WorldBuilder(), OllamaChat(), ImageGenerator(), NotesApp()],
+            games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
+            title="KleinBOTTLE PC",
+        )
 
     pane.set_computer_callback(open_kleinpc)
     for child in pane.winfo_children():

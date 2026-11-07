@@ -124,6 +124,8 @@ class KleinPC:
         executor: Optional[Callable[[str], str]] = None,
         title: str = "KleinBOTTLE PC",
         layout_path: Path = _LAYOUT_PATH,
+        embedded_in: Optional[tk.Frame] = None,
+        on_exit: Optional[Callable[[], None]] = None,
     ):
         _startup_cfg = _config.load()
         _audio.configure(_startup_cfg)
@@ -133,6 +135,7 @@ class KleinPC:
         self._chats: list = chats or []
         self._executor = executor
         self._layout_path = layout_path
+        self._on_exit = on_exit
         self._active_btn: Optional[tk.Button] = None
         self._active_title: Optional[str] = None
         self._item_btns: dict[str, tk.Button] = {}
@@ -151,13 +154,19 @@ class KleinPC:
 
         _scale = _config._PC_SIZES.get(_startup_cfg.get("pc_size", "medium"), 1.0)
 
-        self._window = tk.Toplevel(root)
-        self._window.title(title)
-        self._window.configure(bg=_WIN_BG)
-        self._window.resizable(False, False)
+        if embedded_in is not None:
+            # Embedded view-swap mode — no separate Toplevel
+            self._window: Optional[tk.Toplevel] = None
+            _container: tk.Misc = embedded_in
+        else:
+            self._window = tk.Toplevel(root)
+            self._window.title(title)
+            self._window.configure(bg=_WIN_BG)
+            self._window.resizable(False, False)
+            _container = self._window
 
         self._monitor = RetroMonitorFrame(
-            self._window,
+            _container,
             bezel_path=_ASSETS / "monitor_widescreen.png",
             rect_path=_ASSETS / "screen_rect_widescreen.json",
             scale=_scale,
@@ -169,7 +178,8 @@ class KleinPC:
         self._build_content(self._monitor.screen)
 
         self._select_terminal()
-        self._window.withdraw()
+        if self._window is not None:
+            self._window.withdraw()
 
     # ──────────────────────────────────────────────────────────────────
     # Layout persistence
@@ -261,6 +271,10 @@ class KleinPC:
             sb, "⚙  Settings", self._select_settings,
             tooltip="Manage categories and preferences",
         )
+        if self._on_exit is not None:
+            tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
+            self._nav_btn(sb, "← Back", self._on_exit,
+                          tooltip="Return to text adventure")
         tk.Frame(sb, bg=_S_SEP, height=1).pack(fill="x")
         tk.Frame(sb, bg=_S_BG).pack(fill="both", expand=True)
 
@@ -581,13 +595,15 @@ class KleinPC:
     # ──────────────────────────────────────────────────────────────────
 
     def show(self) -> None:
+        if self._window is None:
+            return  # embedded mode — always visible
         # On first show, position window offset from root so it doesn't stack on top
         if self._window.winfo_x() == 0 and self._window.winfo_y() == 0:
             root = self._window.master
             try:
-                rx = root.winfo_x()
-                ry = root.winfo_y()
-                rw = root.winfo_width()
+                rx = root.winfo_x()  # type: ignore[union-attr]
+                ry = root.winfo_y()  # type: ignore[union-attr]
+                rw = root.winfo_width()  # type: ignore[union-attr]
                 # Open to the right of the main window; fall back to a fixed offset
                 x = rx + rw + 20
                 y = ry + 40
@@ -598,7 +614,8 @@ class KleinPC:
         self._window.lift()
 
     def hide(self) -> None:
-        self._window.withdraw()
+        if self._window is not None:
+            self._window.withdraw()
 
     def add_app(self, app: KleinApp) -> None:
         """Register a new app as a top-level sidebar item."""
@@ -612,5 +629,5 @@ class KleinPC:
         self._executor = executor
 
     @property
-    def window(self) -> tk.Toplevel:
+    def window(self) -> Optional[tk.Toplevel]:
         return self._window
