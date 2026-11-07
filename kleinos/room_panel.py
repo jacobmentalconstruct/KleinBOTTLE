@@ -201,7 +201,25 @@ class RoomImagePanel(tk.Frame):
                           description: str, area: str) -> None:
         try:
             if not _pipeline_ensure_on_path():
-                self.after(0, lambda: self._set_status("Pipeline not found — check submodule."))
+                self.after(0, lambda: self._set_status(
+                    "Pipeline submodule not found — run git submodule update --init"))
+                self.after(0, lambda: self._regen_btn.configure(state="normal"))
+                return
+            import urllib.request as _req
+            try:
+                from kleinos import config as _cfg
+                _c = _cfg.load().get("image_pipeline", {})
+                _host = _c.get("comfyui_host", "127.0.0.1")
+                _port = int(_c.get("comfyui_port", 8188))
+            except Exception:
+                _host, _port = "127.0.0.1", 8188
+            try:
+                with _req.urlopen(f"http://{_host}:{_port}/system_stats", timeout=1.0):
+                    pass
+            except Exception:
+                self.after(0, lambda: self._set_status(
+                    "Image pipeline offline — start it in the Image Generator app"))
+                self.after(0, lambda: self._regen_btn.configure(state="normal"))
                 return
             from pipeline.client import collect_images, queue_prompt, wait_for_completion  # type: ignore[import]
             from pipeline.styles import build_workflow  # type: ignore[import]

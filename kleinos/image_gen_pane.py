@@ -4,12 +4,14 @@ kleinos/image_gen_pane.py
 In-PC image generator — KleinApp that wraps the image-generation-pipeline
 submodule (tools/image-pipeline/) with a simple GUI.
 
-Flow:
-  1. User clicks Generate → health-check pings ComfyUI /system_stats
-  2a. Pipeline alive   → queue workflow, stream status, display result
-  2b. Pipeline offline → show Launch button + log area
-  3. Launch → subprocess.Popen ComfyUI, stream stdout to log, detect ready
-             → auto-trigger generation once ready
+Pipeline lifecycle:
+  The status bar shows ● OFFLINE / STARTING / ONLINE and exposes
+  Start / Stop / Reset buttons.  Generate is disabled until ONLINE.
+  A background poll every 4 s keeps the state current so externally-
+  launched ComfyUI instances are detected automatically.
+
+Generation flow (when ONLINE):
+  User clicks Generate → queue workflow → stream status → display result
 """
 from __future__ import annotations
 
@@ -44,6 +46,10 @@ _DIM    = "#005500"
 _HDR_BG = "#001a00"
 _WARN   = "#cc6600"
 
+_DOT_OFFLINE  = "#cc3300"
+_DOT_STARTING = "#cc6600"
+_DOT_ONLINE   = "#00cc33"
+
 _OUT_DIR  = Path(__file__).resolve().parent.parent / "data" / "generated"
 _STYLES   = ("default", "kleinbottle", "projectmapper")
 
@@ -65,6 +71,8 @@ _READY_SIGNALS = (
     "Starting server",
     "Serving on",
 )
+
+_POLL_MS = 4000   # pipeline health-check interval
 
 
 def _comfyui_base() -> str:
@@ -96,12 +104,14 @@ def _ping() -> bool:
         return False
 
 
-def _mk_btn(parent: tk.Widget, text: str, command, fg: str = _FG) -> tk.Button:
+def _mk_btn(parent: tk.Widget, text: str, command, fg: str = _FG,
+            font_size: int = 9) -> tk.Button:
     return tk.Button(
         parent, text=text, bg=_BG, fg=fg,
         activebackground="#001a00", activeforeground=_FG,
-        relief="flat", font=("Consolas", 9, "bold"),
+        relief="flat", font=("Consolas", font_size, "bold"),
         cursor="hand2", command=command,
+        disabledforeground=_DIM,
     )
 
 
@@ -113,22 +123,49 @@ class ImageGenPane(tk.Frame):
         self._on_exit      = on_exit
         self._photo: Optional[object] = None
         self._busy         = False
-        self._launching    = False
         self._proc: Optional[subprocess.Popen] = None  # type: ignore[type-arg]
         self._pending_prompt: Optional[tuple[str, str]] = None
-        self._orig_img: Optional[object] = None   # unfiltered PIL image
+        self._orig_img: Optional[object] = None
         self._active_filter: Optional[str] = None
         self._filter_btns: dict[str, tk.Button] = {}
+        self._pl_state     = "offline"   # "offline" | "starting" | "online" | "stopping"
+        self._poll_after: Optional[str] = None
         self._build()
+        # Initial async ping; don't block UI on startup
+        threading.Thread(target=self._async_poll, daemon=True).start()
 
     # ── Layout ────────────────────────────────────────────────────────
 
     def _build(self) -> None:
-        # Header
+        # Header + pipeline status bar on one row
         hdr = tk.Frame(self, bg=_HDR_BG)
         hdr.pack(fill="x")
         tk.Label(hdr, text=" IMAGE GENERATOR ", bg=_HDR_BG, fg=_FG,
                  font=("Consolas", 10, "bold")).pack(side="left", padx=8, pady=6)
+
+        # Pipeline status cluster (right side of header)
+        pl_bar = tk.Frame(hdr, bg=_HDR_BG)
+        pl_bar.pack(side="right", padx=8, pady=4)
+
+        self._pl_dot = tk.Label(pl_bar, text="●", bg=_HDR_BG, fg=_DOT_OFFLINE,
+                                font=("Consolas", 10))
+        self._pl_dot.pack(side="left", padx=(0, 4))
+
+        self._pl_lbl = tk.Label(pl_bar, text="OFFLINE", bg=_HDR_BG, fg=_DIM,
+                                font=("Consolas", 8, "bold"), width=8, anchor="w")
+        self._pl_lbl.pack(side="left", padx=(0, 8))
+
+        self._pl_start_btn = _mk_btn(pl_bar, "[ Start ]",  self._start_pipeline,
+                                     fg=_FG, font_size=8)
+        self._pl_start_btn.pack(side="left", padx=2)
+
+        self._pl_stop_btn  = _mk_btn(pl_bar, "[ Stop ]",   self._stop_pipeline,
+                                     fg=_WARN, font_size=8)
+        self._pl_stop_btn.pack(side="left", padx=2)
+
+        self._pl_reset_btn = _mk_btn(pl_bar, "[ Reset ]",  self._restart_pipeline,
+                                     fg=_DIM, font_size=8)
+        self._pl_reset_btn.pack(side="left", padx=2)
 
         # Prompt
         pr = tk.Frame(self, bg=_BG)
@@ -136,15 +173,17 @@ class ImageGenPane(tk.Frame):
         tk.Label(pr, text="PROMPT", bg=_BG, fg=_DIM,
                  font=("Consolas", 8)).pack(anchor="w")
         self._prompt_var = tk.StringVar()
-        tk.Entry(
+        self._prompt_entry = tk.Entry(
             pr, textvariable=self._prompt_var,
             bg=_BG, fg=_FG, insertbackground=_FG,
             font=("Consolas", 9), relief="flat",
             highlightthickness=1, highlightbackground=_BORDER,
             highlightcolor=_FG,
-        ).pack(fill="x", pady=(2, 0))
+            disabledbackground=_BG, disabledforeground=_DIM,
+        )
+        self._prompt_entry.pack(fill="x", pady=(2, 0))
 
-        # Style + action button row
+        # Style + Generate row
         ctrl = tk.Frame(self, bg=_BG)
         ctrl.pack(fill="x", padx=8, pady=4)
         tk.Label(ctrl, text="STYLE", bg=_BG, fg=_DIM,
@@ -161,7 +200,7 @@ class ImageGenPane(tk.Frame):
         self._gen_btn.pack(side="left")
 
         # Status line
-        self._status_var = tk.StringVar(value="Ready.")
+        self._status_var = tk.StringVar(value="Waiting for pipeline…")
         tk.Label(self, textvariable=self._status_var,
                  bg=_BG, fg=_DIM, font=("Consolas", 8),
                  anchor="w").pack(fill="x", padx=10, pady=(0, 2))
@@ -190,9 +229,9 @@ class ImageGenPane(tk.Frame):
                 command=self._reset_filter,
             ).pack(side="left", padx=(8, 0))
 
-        # Launch log — hidden until pipeline needs starting
+        # Launch log — hidden until pipeline is starting
         self._log_frame = tk.Frame(self, bg=_BG)
-        self._log_text: Optional[tk.Text] = None  # created lazily
+        self._log_text: Optional[tk.Text] = None
 
         # Image canvas
         self._canvas = tk.Canvas(self, bg="#000000",
@@ -200,103 +239,106 @@ class ImageGenPane(tk.Frame):
         self._canvas.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self._canvas.bind("<Configure>", self._on_resize)
 
-    def _show_log(self) -> None:
-        if self._log_text is not None:
-            return
-        self._log_frame.pack(fill="x", padx=8, pady=(0, 4), before=self._canvas)
-        self._log_text = tk.Text(
-            self._log_frame,
-            height=6, bg="#000a00", fg=_DIM,
-            font=("Consolas", 7), relief="flat",
-            state="disabled", wrap="word",
-            highlightthickness=1, highlightbackground=_BORDER,
-        )
-        self._log_text.pack(fill="x")
+        # Apply initial disabled state
+        self._apply_pl_state()
 
-    def _hide_log(self) -> None:
-        if self._log_text is None:
-            return
-        self._log_frame.pack_forget()
-        self._log_text.destroy()
-        self._log_text = None
+    # ── Pipeline state machine ────────────────────────────────────────
 
-    def _append_log(self, line: str) -> None:
-        if self._log_text is None:
-            return
-        self._log_text.configure(state="normal")
-        self._log_text.insert("end", line + "\n")
-        self._log_text.see("end")
-        self._log_text.configure(state="disabled")
+    def _set_pl_state(self, state: str) -> None:
+        self._pl_state = state
+        self._apply_pl_state()
 
-    # ── Entry point ───────────────────────────────────────────────────
+    def _apply_pl_state(self) -> None:
+        """Update all UI to match self._pl_state. Must run on main thread."""
+        s = self._pl_state
+        dot_color = {
+            "offline":  _DOT_OFFLINE,
+            "starting": _DOT_STARTING,
+            "online":   _DOT_ONLINE,
+            "stopping": _DOT_STARTING,
+        }.get(s, _DOT_OFFLINE)
+        label_text = s.upper()
 
-    def _on_generate_click(self) -> None:
-        prompt = self._prompt_var.get().strip()
-        if not prompt:
-            self._status("Enter a prompt first.")
-            return
-        if self._busy or self._launching:
-            self._status("Already working…")
-            return
-        self._gen_btn.configure(state="disabled")
-        self._status("Checking pipeline…")
-        threading.Thread(
-            target=self._check_then_generate,
-            args=(prompt, self._style_var.get()),
-            daemon=True,
-        ).start()
+        self._pl_dot.configure(fg=dot_color)
+        self._pl_lbl.configure(text=label_text,
+                               fg=_FG if s == "online" else _DIM)
 
-    def _check_then_generate(self, prompt: str, style: str) -> None:
-        if _ping():
-            self.after(0, self._hide_log)
-            self._run_generation(prompt, style)
-        else:
-            self.after(0, lambda: self._pipeline_offline(prompt, style))
+        self._pl_start_btn.configure(
+            state="normal" if s == "offline" else "disabled")
+        self._pl_stop_btn.configure(
+            state="normal" if s == "online" else "disabled",
+            fg=_WARN if s == "online" else _DIM)
+        self._pl_reset_btn.configure(
+            state="normal" if s == "online" else "disabled",
+            fg=_FG if s == "online" else _DIM)
 
-    # ── Pipeline offline flow ─────────────────────────────────────────
+        gen_ok = s == "online" and not self._busy
+        self._gen_btn.configure(
+            state="normal" if gen_ok else "disabled",
+            fg=_FG if gen_ok else _DIM)
+        self._prompt_entry.configure(
+            state="normal" if s == "online" else "disabled")
 
-    def _pipeline_offline(self, prompt: str, style: str) -> None:
+        if s == "online" and self._status_var.get() == "Waiting for pipeline…":
+            self._status_var.set("Ready.")
+
+    # ── Pipeline lifecycle ────────────────────────────────────────────
+
+    def _start_pipeline(self) -> None:
         exe = _comfyui_exe()
         if not exe:
-            self._status("Pipeline offline — set comfyui_path in config.")
-            self._gen_btn.configure(text="[ Generate ]", command=self._on_generate_click,
-                                    state="normal", fg=_FG)
+            self._status("Set comfyui_path in Settings → image_pipeline before starting.")
             return
-
-        self._status("Pipeline offline.")
+        self._set_pl_state("starting")
         self._show_log()
-        self._append_log("ComfyUI is not running.")
-        self._append_log(f"Launch target: {exe}")
-        self._append_log("Click [ Launch Pipeline ] to start.")
+        self._append_log(f"Launch: {exe}")
+        threading.Thread(target=self._launch_worker, args=(exe,), daemon=True).start()
 
-        self._gen_btn.configure(
-            text="[ Launch Pipeline ]",
-            fg=_WARN,
-            command=lambda: self._launch_and_generate(exe, prompt, style),
-            state="normal",
-        )
+    def _stop_pipeline(self) -> None:
+        self._set_pl_state("stopping")
+        self._status("Stopping pipeline…")
+        threading.Thread(target=self._stop_worker, daemon=True).start()
 
-    # ── Launch + monitor ──────────────────────────────────────────────
+    def _restart_pipeline(self) -> None:
+        exe = _comfyui_exe()
+        if not exe:
+            self._status("Set comfyui_path in Settings → image_pipeline.")
+            return
+        self._set_pl_state("stopping")
+        self._status("Restarting pipeline…")
+        threading.Thread(target=self._restart_worker, args=(exe,), daemon=True).start()
 
-    def _launch_and_generate(self, exe: str, prompt: str, style: str) -> None:
-        self._launching = True
-        self._pending_prompt = (prompt, style)
-        self._gen_btn.configure(state="disabled")
-        self._status("Launching pipeline…")
-        threading.Thread(
-            target=self._launch_worker,
-            args=(exe,),
-            daemon=True,
-        ).start()
+    def _stop_worker(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self._proc = None
+        self.after(0, lambda: self._set_pl_state("offline"))
+        self.after(0, lambda: self._status("Pipeline stopped."))
+        self.after(0, self._hide_log)
+
+    def _restart_worker(self, exe: str) -> None:
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self._proc = None
+        self.after(0, lambda: self._set_pl_state("starting"))
+        self.after(0, self._show_log)
+        self.after(0, lambda: self._append_log("─── restarting ───"))
+        self._launch_worker(exe)
 
     def _launch_worker(self, exe: str) -> None:
         try:
-            # Determine python executable or run as script
             exe_path = Path(exe)
-            if exe_path.suffix.lower() == ".py":
-                cmd = [sys.executable, str(exe_path)]
-            else:
-                cmd = [str(exe_path)]
+            cmd = ([sys.executable, str(exe_path)]
+                   if exe_path.suffix.lower() == ".py"
+                   else [str(exe_path)])
 
             self._proc = subprocess.Popen(
                 cmd,
@@ -311,44 +353,64 @@ class ImageGenPane(tk.Frame):
             for raw_line in self._proc.stdout:  # type: ignore[union-attr]
                 line = raw_line.rstrip()
                 self.after(0, lambda l=line: self._append_log(l))
-                self.after(0, lambda l=line: self._status(l[:80]))
                 if not ready and any(sig in line for sig in _READY_SIGNALS):
                     ready = True
                     self.after(0, self._on_pipeline_ready)
 
-            # Process ended without ready signal
             if not ready:
                 self.after(0, lambda: self._status("Pipeline exited unexpectedly."))
-                self.after(0, lambda: self._gen_btn.configure(
-                    text="[ Generate ]", fg=_FG,
-                    command=self._on_generate_click, state="normal",
-                ))
+                self.after(0, lambda: self._set_pl_state("offline"))
         except Exception as exc:
             msg = str(exc)[:120]
             self.after(0, lambda: self._status(f"Launch error: {msg}"))
-            self.after(0, lambda: self._gen_btn.configure(
-                text="[ Generate ]", fg=_FG,
-                command=self._on_generate_click, state="normal",
-            ))
-        finally:
-            self._launching = False
+            self.after(0, lambda: self._set_pl_state("offline"))
 
     def _on_pipeline_ready(self) -> None:
-        self._status("Pipeline ready. Generating…")
         self._append_log("─── Pipeline ready ───")
-        # Restore normal button, then auto-trigger with pending prompt
-        self._gen_btn.configure(text="[ Generate ]", fg=_FG,
-                                command=self._on_generate_click)
+        self._set_pl_state("online")
+        self._status("Pipeline online.")
         if self._pending_prompt:
             prompt, style = self._pending_prompt
             self._pending_prompt = None
             self._run_generation(prompt, style)
 
-    # ── Generation worker ─────────────────────────────────────────────
+    # ── Background health poll ────────────────────────────────────────
+
+    def _async_poll(self) -> None:
+        """Run in a background thread; reschedules itself via after()."""
+        alive = _ping()
+        self.after(0, lambda: self._on_poll_result(alive))
+
+    def _on_poll_result(self, alive: bool) -> None:
+        if alive and self._pl_state == "offline":
+            self._set_pl_state("online")
+            self._status("Pipeline online.")
+        elif not alive and self._pl_state == "online":
+            self._set_pl_state("offline")
+            self._status("Pipeline went offline.")
+        self._poll_after = self.after(
+            _POLL_MS,
+            lambda: threading.Thread(target=self._async_poll, daemon=True).start(),
+        )
+
+    # ── Generation ────────────────────────────────────────────────────
+
+    def _on_generate_click(self) -> None:
+        if self._pl_state != "online":
+            self._status("Start the pipeline first.")
+            return
+        prompt = self._prompt_var.get().strip()
+        if not prompt:
+            self._status("Enter a prompt first.")
+            return
+        if self._busy:
+            self._status("Already generating…")
+            return
+        self._run_generation(prompt, self._style_var.get())
 
     def _run_generation(self, prompt: str, style: str) -> None:
         self._busy = True
-        self._gen_btn.configure(state="disabled")
+        self._apply_pl_state()
         threading.Thread(
             target=self._worker,
             args=(prompt, style),
@@ -386,10 +448,37 @@ class ImageGenPane(tk.Frame):
             self.after(0, lambda: self._status(f"Error: {msg}"))
         finally:
             self._busy = False
-            self.after(0, lambda: self._gen_btn.configure(
-                text="[ Generate ]", fg=_FG,
-                command=self._on_generate_click, state="normal",
-            ))
+            self.after(0, self._apply_pl_state)
+
+    # ── Launch log ────────────────────────────────────────────────────
+
+    def _show_log(self) -> None:
+        if self._log_text is not None:
+            return
+        self._log_frame.pack(fill="x", padx=8, pady=(0, 4), before=self._canvas)
+        self._log_text = tk.Text(
+            self._log_frame,
+            height=6, bg="#000a00", fg=_DIM,
+            font=("Consolas", 7), relief="flat",
+            state="disabled", wrap="word",
+            highlightthickness=1, highlightbackground=_BORDER,
+        )
+        self._log_text.pack(fill="x")
+
+    def _hide_log(self) -> None:
+        if self._log_text is None:
+            return
+        self._log_frame.pack_forget()
+        self._log_text.destroy()
+        self._log_text = None
+
+    def _append_log(self, line: str) -> None:
+        if self._log_text is None:
+            return
+        self._log_text.configure(state="normal")
+        self._log_text.insert("end", line + "\n")
+        self._log_text.see("end")
+        self._log_text.configure(state="disabled")
 
     # ── Display ───────────────────────────────────────────────────────
 
@@ -452,12 +541,14 @@ class ImageGenPane(tk.Frame):
         try:
             from kleinos.pipeline_client import convert_available, ensure_on_path
             if not convert_available():
-                self.after(0, lambda: self._status("ASCII needs torch+numpy — pip install torch numpy"))
+                self.after(0, lambda: self._status(
+                    "ASCII needs torch+numpy — pip install torch numpy"))
                 self.after(0, self._reset_filter)
                 return
             ensure_on_path()
             from pipeline.convert import to_ascii  # type: ignore[import]
-            import tempfile, os
+            import os
+            import tempfile
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 tmp_path = tmp.name
             try:
@@ -469,7 +560,8 @@ class ImageGenPane(tk.Frame):
                 os.unlink(tmp_path)
 
             img = self._ascii_to_image(art)
-            self.after(0, lambda i=img: self._render(i, self._canvas.winfo_width(), self._canvas.winfo_height()))
+            self.after(0, lambda i=img: self._render(
+                i, self._canvas.winfo_width(), self._canvas.winfo_height()))
             self.after(0, lambda: self._status("Filter: ascii"))
         except Exception as exc:
             msg = str(exc)[:100]
@@ -517,7 +609,6 @@ class ImageGenPane(tk.Frame):
         """Apply a named filter to a PIL RGB image; return a new image."""
         if key == "phosphor":
             gray = img.convert("L")  # type: ignore[union-attr]
-            # Map luminance into the green phosphor range (#010a01 → #00ff44)
             r = gray.point(lambda v: int(v * 0.00))
             g = gray.point(lambda v: int(v * 1.00))
             b = gray.point(lambda v: int(v * 0.27))
