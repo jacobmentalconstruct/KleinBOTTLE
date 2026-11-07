@@ -87,7 +87,7 @@ def _patch_ui_theme() -> None:
         _ui.FONT_UI      = _kt.FONT_UI
         _ui.FONT_HEADING = _kt.FONT_HEADING
         _ui.FONT_STORY   = _kt.FONT_STORY
-    except ImportError:
+    except ImportError:  # SAFE: src/ui_theme.py is optional (KB surfaces work without it)
         pass
 
 
@@ -261,7 +261,7 @@ class KleinAdventurePane(tk.Frame):
                             room["description"],
                             room.get("area", ""),
                         )
-        except Exception:
+        except Exception:  # MEDIUM: room-poll errors hidden; loop keeps running — fix in T1
             pass
         self.after(400, self._poll_room)
 

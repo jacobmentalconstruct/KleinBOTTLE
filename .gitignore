@@ -10,3 +10,12 @@ __pycache__/
 
 # MAHisLAND runtime data
 data/mahisland_save.json
+
+# AI-generated images (runtime output — not source assets)
+data/generated/
+
+# KleinOS user runtime state (config, layout, WIP world)
+data/kleinos_config.json
+data/kleinos_layout.json
+data/world_wip.json
+data/world_library/

@@ -62,7 +62,7 @@ def load() -> dict:
         cfg = copy.deepcopy(_DEFAULTS)
         save(cfg)
         return cfg
-    except Exception:
+    except Exception:  # SAFE: corrupted file → silent fallback to defaults
         return copy.deepcopy(_DEFAULTS)
 
 
@@ -73,5 +73,5 @@ def save(cfg: dict) -> None:
             json.dumps(cfg, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-    except Exception:
+    except Exception:  # DANGEROUS: config changes silently lost — fix in T1
         pass

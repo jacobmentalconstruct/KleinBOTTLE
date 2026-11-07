@@ -45,7 +45,7 @@ def _sfx(name: str) -> None:
             import winsound
             for freq, ms in tones:
                 winsound.Beep(freq, ms)
-        except Exception:
+        except Exception:  # SAFE: winsound can fail (non-Windows, device busy)
             pass
     threading.Thread(target=_play, daemon=True).start()
 from kleinos.palette import (
@@ -1077,7 +1077,7 @@ class MAHisLANDPane(tk.Canvas):
         try:
             _SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
             _SAVE_PATH.write_text(json.dumps(data))
-        except Exception:
+        except Exception:  # DANGEROUS: game-save write failure silently lost — fix in T1
             pass
 
     def _load_game(self) -> None:
@@ -1102,13 +1102,13 @@ class MAHisLANDPane(tk.Canvas):
             self._high_score  = data.get("high_score", self._high_score)
             self._camx = self._px - self._vw / 2
             self._camy = self._py - self._vh / 2
-        except Exception:
+        except Exception:  # MEDIUM: corrupt save → reset world (intentional recovery, no log)
             self._reset_world()
 
     def _load_high_score(self) -> int:
         try:
             return json.loads(_SAVE_PATH.read_text()).get("high_score", 0)
-        except Exception:
+        except Exception:  # SAFE: file absent on first run
             return 0
 
     def _update_high_score(self) -> None:
@@ -1119,7 +1119,7 @@ class MAHisLANDPane(tk.Canvas):
         try:
             if _SAVE_PATH.exists():
                 _SAVE_PATH.unlink()
-        except Exception:
+        except Exception:  # SAFE: file may already be gone (concurrent delete)
             pass
 
     # ── HUD helpers ──────────────────────────────────────────────────

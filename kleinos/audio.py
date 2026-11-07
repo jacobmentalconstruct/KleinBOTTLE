@@ -37,7 +37,7 @@ def _beep(freq: int, ms: int) -> None:
     try:
         import winsound
         winsound.Beep(max(37, min(32767, freq)), max(1, ms))
-    except Exception:
+    except Exception:  # SAFE: winsound.Beep can fail (device busy, driver issue)
         pass
 
 

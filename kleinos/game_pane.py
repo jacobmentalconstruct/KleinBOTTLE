@@ -222,7 +222,7 @@ class SpaceInvadersPane(tk.Canvas):
     def _load_high_score(self) -> int:
         try:
             return int(json.loads(_SAVE_PATH.read_text(encoding="utf-8"))["high_score"])
-        except Exception:
+        except Exception:  # SAFE: file absent on first run
             return 0
 
     def _save_high_score(self, score: int) -> None:
@@ -230,7 +230,7 @@ class SpaceInvadersPane(tk.Canvas):
             _SAVE_PATH.write_text(
                 json.dumps({"high_score": score}, indent=2), encoding="utf-8"
             )
-        except Exception:
+        except Exception:  # MEDIUM: high-score write failure silently lost
             pass
 
     # ── Update ───────────────────────────────────────────────────────
