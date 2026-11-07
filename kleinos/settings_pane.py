@@ -117,7 +117,7 @@ class SettingsPane(tk.Frame):
         # Tab bar
         tab_bar = tk.Frame(self, bg=_CHROME, bd=0)
         tab_bar.pack(fill="x")
-        for name in ("Display", "Sound", "Keybinds", "Navigation"):
+        for name in ("Display", "Sound", "Keybinds", "Navigation", "AI"):
             btn = tk.Button(
                 tab_bar, text=name,
                 command=lambda n=name: self._switch_tab(n),
@@ -140,6 +140,7 @@ class SettingsPane(tk.Frame):
             ("Sound",      self._build_sound_tab),
             ("Keybinds",   self._build_keybinds_tab),
             ("Navigation", self._build_navigation_tab),
+            ("AI",         self._build_ai_tab),
         ):
             frame = tk.Frame(content, bg=_BG)
             self._tab_frames[name] = frame
@@ -482,6 +483,64 @@ class SettingsPane(tk.Frame):
         tk.Label(parent, text="Rebinding coming later.",
                  bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
                  ).pack(fill="x")
+
+    # ── AI tab ───────────────────────────────────────────────────────
+
+    def _build_ai_tab(self, parent: tk.Frame) -> None:
+        tk.Label(parent, text="OLLAMA",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 2))
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
+        tk.Label(parent,
+                 text="Ollama host, port, and models for the room-assist AI.\nChanges take effect on next KleinOS launch.",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w", justify="left",
+                 ).pack(fill="x", pady=(0, 8))
+
+        ocfg = self._cfg.get("ollama", {})
+
+        fields = [
+            ("Host",             "host",        str(ocfg.get("host",        "127.0.0.1"))),
+            ("Port",             "port",        str(ocfg.get("port",        11434))),
+            ("Narrative model",  "narr_model",  str(ocfg.get("narr_model",  "qwen2.5:7b"))),
+            ("Field model",      "field_model", str(ocfg.get("field_model", "qwen2.5:3b"))),
+        ]
+        self._ollama_vars: dict[str, tk.StringVar] = {}
+        for label, key, default in fields:
+            row = tk.Frame(parent, bg=_BG)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{label}:", bg=_BG, fg=_TEXT_DIM,
+                     font=_FONT_SM, width=18, anchor="w").pack(side="left")
+            var = tk.StringVar(value=default)
+            self._ollama_vars[key] = var
+            tk.Entry(
+                row, textvariable=var,
+                bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
+                font=_FONT_SM, relief="flat",
+                highlightthickness=1, highlightcolor=_BORDER,
+            ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(10, 6))
+        tk.Button(
+            parent, text="Save Ollama settings",
+            command=self._save_ollama,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT,
+            relief="flat", padx=12, pady=4, bd=0, cursor="hand2",
+        ).pack(anchor="w")
+
+    def _save_ollama(self) -> None:
+        try:
+            port = int(self._ollama_vars["port"].get().strip())
+        except ValueError:
+            self._status_var.set("Port must be a number.")
+            return
+        ocfg = self._cfg.setdefault("ollama", {})
+        ocfg["host"]        = self._ollama_vars["host"].get().strip()
+        ocfg["port"]        = port
+        ocfg["narr_model"]  = self._ollama_vars["narr_model"].get().strip()
+        ocfg["field_model"] = self._ollama_vars["field_model"].get().strip()
+        _config.save(self._cfg)
+        self._status_var.set("Ollama settings saved — restart to apply.")
 
     # ── Navigation tab ───────────────────────────────────────────────
 

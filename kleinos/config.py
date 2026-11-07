@@ -24,6 +24,12 @@ _PC_SIZES = {
 _DEFAULTS: dict = {
     "palette": "green",
     "pc_size": "medium",
+    "ollama": {
+        "host": "127.0.0.1",
+        "port": 11434,
+        "narr_model": "qwen2.5:7b",
+        "field_model": "qwen2.5:3b",
+    },
     "image_pipeline": {
         "path": "",
         "github_url": "https://github.com/jacobmentalconstruct/image-generation-pipeline.git",

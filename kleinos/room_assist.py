@@ -47,6 +47,22 @@ _NARR_MODEL  = "qwen2.5:7b"   # narrative conversation
 _FIELD_MODEL = "qwen2.5:3b"   # per-field generation (fast)
 _WINDOW_SIZE = 6               # rolling window in exchanges
 
+
+def _load_ollama_defaults() -> None:
+    global _OLLAMA_HOST, _OLLAMA_PORT, _NARR_MODEL, _FIELD_MODEL
+    try:
+        from kleinos import config as _kconfig
+        ocfg = _kconfig.load().get("ollama", {})
+        _OLLAMA_HOST = str(ocfg.get("host", _OLLAMA_HOST))
+        _OLLAMA_PORT = int(ocfg.get("port", _OLLAMA_PORT))
+        _NARR_MODEL  = str(ocfg.get("narr_model", _NARR_MODEL))
+        _FIELD_MODEL = str(ocfg.get("field_model", _FIELD_MODEL))
+    except Exception:  # SAFE: config absent on first run
+        pass
+
+
+_load_ollama_defaults()
+
 _NARRATIVE_SYSTEM = """\
 You are a creative story collaborator helping a game designer conceive a room \
 for a text adventure game.
