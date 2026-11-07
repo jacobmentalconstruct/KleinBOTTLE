@@ -232,6 +232,63 @@ class SettingsPane(tk.Frame):
             relief="flat", padx=12, pady=4, bd=0, cursor="hand2",
         ).pack(anchor="w", pady=(6, 0))
 
+        # ── Image Generation Pipeline ───────────────────────────────────
+        tk.Label(parent, text="IMAGE GENERATION PIPELINE",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(14, 2))
+        tk.Frame(parent, bg=_BORDER, height=1).pack(fill="x", pady=(0, 6))
+
+        self._pipeline_path_var = tk.StringVar(
+            value=self._cfg.get("image_pipeline", {}).get(
+                "path", r"C:\Jacob\Apps & Tools\image-generation-pipeline"
+            )
+        )
+        self._pipeline_github_var = tk.StringVar(
+            value=self._cfg.get("image_pipeline", {}).get("github_url", "")
+        )
+
+        path_row = tk.Frame(parent, bg=_BG)
+        path_row.pack(fill="x", pady=(0, 2))
+        tk.Label(path_row, text="Path:", bg=_BG, fg=_TEXT_DIM,
+                 font=_FONT_SM, width=8, anchor="w").pack(side="left")
+        tk.Entry(
+            path_row, textvariable=self._pipeline_path_var,
+            bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
+            font=_FONT_SM, relief="flat",
+            highlightthickness=1, highlightcolor=_BORDER,
+        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+        gh_row = tk.Frame(parent, bg=_BG)
+        gh_row.pack(fill="x", pady=(0, 4))
+        tk.Label(gh_row, text="GitHub:", bg=_BG, fg=_TEXT_DIM,
+                 font=_FONT_SM, width=8, anchor="w").pack(side="left")
+        tk.Entry(
+            gh_row, textvariable=self._pipeline_github_var,
+            bg=_BG, fg=_TEXT_FG, insertbackground=_TEXT_FG,
+            font=_FONT_SM, relief="flat",
+            highlightthickness=1, highlightcolor=_BORDER,
+        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+        btn_row = tk.Frame(parent, bg=_BG)
+        btn_row.pack(fill="x")
+        tk.Button(
+            btn_row, text="Save Path",
+            command=self._save_pipeline_path,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT_SM,
+            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
+        ).pack(side="left", padx=(0, 6))
+        tk.Button(
+            btn_row, text="Install (git clone)",
+            command=self._install_pipeline,
+            bg=_BTN_BG, fg=_TEXT_FG, activebackground=_BTN_ACT,
+            activeforeground=_TEXT_HI, font=_FONT_SM,
+            relief="flat", padx=10, pady=3, bd=0, cursor="hand2",
+        ).pack(side="left")
+        tk.Label(parent, text="Install clones the GitHub repo to the path above.",
+                 bg=_BG, fg=_TEXT_DIM, font=_FONT_SM, anchor="w",
+                 ).pack(fill="x", pady=(4, 0))
+
     def _select_pc_size(self, key: str) -> None:
         if key == self._cfg.get("pc_size", "medium"):
             return
@@ -261,6 +318,32 @@ class SettingsPane(tk.Frame):
                 font=_FONT if is_sel else _FONT_SM,
             )
         self._status_var.set(f"Palette set to '{_PALETTE_LABELS[key]}' — restart to apply.")
+
+    def _save_pipeline_path(self) -> None:
+        path = self._pipeline_path_var.get().strip()
+        url  = self._pipeline_github_var.get().strip()
+        cfg_pip = self._cfg.setdefault("image_pipeline", {})
+        cfg_pip["path"] = path
+        cfg_pip["github_url"] = url
+        _config.save(self._cfg)
+        self._status_var.set("Pipeline path saved.")
+
+    def _install_pipeline(self) -> None:
+        import subprocess
+        path = self._pipeline_path_var.get().strip()
+        url  = self._pipeline_github_var.get().strip()
+        if not url:
+            self._status_var.set("Set a GitHub URL first.")
+            return
+        if not path:
+            self._status_var.set("Set a path first.")
+            return
+        self._save_pipeline_path()
+        self._status_var.set(f"Cloning to {path}…  (check terminal for progress)")
+        try:
+            subprocess.Popen(["git", "clone", url, path])
+        except FileNotFoundError:
+            self._status_var.set("git not found — install Git first.")
 
     # ── Sound tab ────────────────────────────────────────────────────
 

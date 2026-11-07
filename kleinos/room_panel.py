@@ -36,7 +36,17 @@ except ImportError:
 
 _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
 
-_PIPELINE_ROOT = Path(r"C:\Jacob\Apps & Tools\image-generation-pipeline")
+def _pipeline_root() -> Path:
+    """Read pipeline path from config at call time so settings changes take effect."""
+    try:
+        from kleinos import config as _cfg
+        c = _cfg.load()
+        p = c.get("image_pipeline", {}).get("path", "")
+        if p:
+            return Path(p)
+    except Exception:
+        pass
+    return Path(r"C:\Jacob\Apps & Tools\image-generation-pipeline")
 _ROOMS_DIR = Path(__file__).resolve().parent.parent / "data" / "rooms"
 
 _BG        = "#010a01"
@@ -188,8 +198,9 @@ class RoomImagePanel(tk.Frame):
     def _generate_worker(self, room_id: str, room_name: str,
                           description: str, area: str) -> None:
         try:
-            if str(_PIPELINE_ROOT) not in sys.path:
-                sys.path.insert(0, str(_PIPELINE_ROOT))
+            root = _pipeline_root()
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
             from pipeline.client import collect_images, queue_prompt, wait_for_completion  # type: ignore[import]
             from pipeline.styles import build_workflow  # type: ignore[import]
 

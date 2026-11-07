@@ -7,7 +7,7 @@
       "id": "hall",
       "name": "The Hall",
       "area": "KleinBOTTLE House",
-      "description": "A narrow hallway runs through the heart of the house. Doors branch to every room. The front door sits at the end, daylight outlining its frame.",
+      "description": "A narrow hallway runs through the heart of the house. Doors branch off to every room. The front door sits at the far end, daylight outlining its frame.",
       "exits": {
         "west": "living_room",
         "north": "kitchen",
@@ -20,12 +20,14 @@
           "id": "coat_rack",
           "name": "Coat Rack",
           "kind": "furniture",
-          "description": "A wooden coat rack hung with a few jackets and an umbrella."
+          "short_desc": "A wooden rack hung with jackets and an umbrella",
+          "description": "A wooden coat rack hung with a few jackets and an umbrella. Someone left a scarf looped over the top peg."
         },
         {
           "id": "hall_mirror",
           "name": "Mirror",
           "kind": "furniture",
+          "short_desc": "A tall mirror leaning near the front door",
           "description": "A tall mirror leans against the wall near the front door. You look tired."
         }
       ],
@@ -49,25 +51,29 @@
           "id": "sofa",
           "name": "Sofa",
           "kind": "furniture",
+          "short_desc": "A deep worn sofa with mismatched cushions",
           "description": "A deep, worn sofa with mismatched cushions. Extremely comfortable."
         },
         {
           "id": "screen",
           "name": "Screen",
           "kind": "terminal",
-          "description": "A large flat screen mounted on the wall. Currently off."
+          "short_desc": "A large flat screen on the wall, currently off",
+          "description": "A large flat screen mounted on the wall. Currently off. The standby light blinks once every few seconds."
         },
         {
           "id": "coffee_table",
           "name": "Coffee Table",
           "kind": "furniture",
-          "description": "A low table with a few scattered books and an empty mug."
+          "short_desc": "A low table scattered with books and an empty mug",
+          "description": "A low table with a few scattered books and an empty mug. Someone started a crossword puzzle and abandoned it."
         },
         {
           "id": "living_bookshelf",
           "name": "Bookshelf",
           "kind": "furniture",
-          "description": "Floor-to-ceiling shelves packed with paperbacks and a few framed photos."
+          "short_desc": "Floor-to-ceiling shelves packed with paperbacks",
+          "description": "Floor-to-ceiling shelves packed with paperbacks and a few framed photos. The titles are a strange mix — travel memoirs beside heavy science texts."
         }
       ],
       "actors": [],
@@ -91,19 +97,22 @@
           "id": "countertop",
           "name": "Countertop",
           "kind": "furniture",
-          "description": "A clean countertop with a coffee maker and a few dishes drying beside the sink."
+          "short_desc": "Countertop with a coffee maker and drying dishes",
+          "description": "A clean countertop with a coffee maker and a few dishes drying beside the sink. The coffee maker is still warm."
         },
         {
           "id": "kitchen_table",
           "name": "Kitchen Table",
           "kind": "furniture",
-          "description": "A small round table with two chairs."
+          "short_desc": "A small round table with two chairs",
+          "description": "A small round table with two chairs. A newspaper sits folded at one place, unread."
         },
         {
           "id": "back_door",
           "name": "Back Door",
           "kind": "furniture",
-          "description": "A plain wooden back door. Through its glass panel you can see the back yard."
+          "short_desc": "A wooden back door with a small glass panel",
+          "description": "A plain wooden back door. Through its glass panel you can see the back yard — the vegetable patch, the fence, the trees beyond."
         }
       ],
       "actors": [],
@@ -127,19 +136,22 @@
           "id": "bed",
           "name": "Bed",
           "kind": "furniture",
-          "description": "A large bed with rumpled covers and too many pillows."
+          "short_desc": "A large bed with rumpled covers and too many pillows",
+          "description": "A large bed with rumpled covers and too many pillows. It looks deeply comfortable."
         },
         {
           "id": "wardrobe",
           "name": "Wardrobe",
           "kind": "furniture",
-          "description": "A tall wardrobe. Clothes hang inside in approximate order."
+          "short_desc": "A tall wardrobe against the wall",
+          "description": "A tall wardrobe. Clothes hang inside in approximate order. Something has fallen off a hanger and is pooled at the bottom."
         },
         {
           "id": "nightstand",
           "name": "Nightstand",
           "kind": "furniture",
-          "description": "A small nightstand with a lamp, a glass of water, and a paperback left face-down."
+          "short_desc": "A small nightstand with a lamp and a face-down paperback",
+          "description": "A small nightstand with a lamp, a glass of water, and a paperback left face-down at an interesting page."
         }
       ],
       "actors": [],
@@ -162,18 +174,21 @@
           "id": "bathtub",
           "name": "Bathtub",
           "kind": "furniture",
-          "description": "A claw-foot cast-iron tub. Someone has left a rubber duck on the edge."
+          "short_desc": "A claw-foot cast-iron tub with a rubber duck on the edge",
+          "description": "A claw-foot cast-iron tub. Someone has left a rubber duck balanced on the edge. It watches the room with blank approval."
         },
         {
           "id": "bathroom_sink",
           "name": "Sink",
           "kind": "furniture",
-          "description": "A pedestal sink with a fogged mirror above it."
+          "short_desc": "A pedestal sink with a fogged mirror above",
+          "description": "A pedestal sink with a fogged mirror above it. The fog hasn't cleared yet."
         },
         {
           "id": "medicine_cabinet",
           "name": "Medicine Cabinet",
           "kind": "furniture",
+          "short_desc": "A small cabinet behind the mirror, politely closed",
           "description": "A small cabinet behind the mirror. It is politely closed."
         }
       ],
@@ -188,7 +203,7 @@
       "id": "office",
       "name": "Office",
       "area": "KleinBOTTLE House",
-      "description": "You are sitting at the desk. The monitor glows a steady green in the quiet room. Behind it, a window looks out onto the yard. To your left, a floating shelf \u00e2\u20ac\u201d the cat is asleep on it, one paw hanging over the edge. To your right, a bookshelf. The rest of the house waits beyond the door.",
+      "description": "The room is quiet. A wide desk sits beneath the window, its monitor casting a steady green glow over the surface. A floating shelf runs along one wall — the cat sleeps on it, one paw hanging over the edge. A tall bookshelf lines the opposite wall. The door leads back to the hall.",
       "exits": {
         "west": "hall"
       },
@@ -197,36 +212,42 @@
           "id": "office_desk",
           "name": "Desk",
           "kind": "furniture",
-          "description": "A wide desk positioned beneath the window. Papers, a keyboard, and a steaming mug occupy its surface."
+          "short_desc": "A wide desk beneath the window, keyboard and mug on its surface",
+          "description": "A wide desk positioned beneath the window. Papers, a keyboard, and a steaming mug occupy its surface. The window behind it looks out onto the yard."
         },
         {
           "id": "klein_pc",
           "name": "KleinBOTTLE PC",
           "kind": "terminal",
+          "short_desc": "A compact machine glowing a steady green",
           "description": "A compact machine on the desk. Its monitor glows a steady green. This is it. This is the computer."
         },
         {
           "id": "cat_shelf",
           "name": "Floating Shelf",
           "kind": "furniture",
-          "description": "A wall-mounted shelf to the left of the desk. The cat fills it completely."
+          "short_desc": "A wall-mounted shelf, mostly occupied by cat",
+          "description": "A wall-mounted shelf to the left of the desk. The cat fills it completely. The shelf was perhaps not built for this purpose."
         },
         {
           "id": "office_window",
           "name": "Window",
           "kind": "furniture",
-          "description": "A wide window directly behind the desk. Outside, the yard stretches to the treeline."
+          "short_desc": "A wide window looking out to the yard and treeline",
+          "description": "A wide window directly behind the desk. Outside, the yard stretches to the treeline. The light is good in the mornings."
         },
         {
           "id": "office_bookshelf",
           "name": "Bookshelf",
           "kind": "furniture",
-          "description": "A tall bookshelf to the right of the desk, packed with technical manuals, notebooks, and a few worn novels."
+          "short_desc": "A tall shelf packed with manuals, notebooks, and worn novels",
+          "description": "A tall bookshelf to the right of the desk, packed with technical manuals, notebooks, and a few worn novels. Everything is organised in a system only one person understands."
         },
         {
           "id": "cat",
           "name": "Cat",
           "kind": "cat",
+          "short_desc": "A large tabby, one paw hanging over the edge",
           "description": "A large tabby cat occupies the floating shelf like it was built for exactly that purpose. One eye is half-open. It is judging you."
         }
       ],
@@ -234,7 +255,8 @@
         {
           "id": "cat",
           "name": "Cat",
-          "description": "A grey cat is curled up on the floating shelf, deeply asleep. One paw hangs over the edge."
+          "short_desc": "A grey tabby curled on the floating shelf, deeply asleep",
+          "description": "A grey tabby is curled up on the floating shelf, deeply asleep. One paw hangs over the edge. It has been here longer than the shelf."
         }
       ],
       "secrets": [],
@@ -257,13 +279,15 @@
           "id": "front_gate",
           "name": "Front Gate",
           "kind": "furniture",
+          "short_desc": "A large iron gate, slightly rusty at the hinges",
           "description": "A large iron gate, slightly rusty at the hinges. It opens with a satisfying clank."
         },
         {
           "id": "garden_path",
           "name": "Garden Path",
           "kind": "furniture",
-          "description": "Flagstones set into neat grass, running from the front door to the gate."
+          "short_desc": "Flagstones set into neat grass from door to gate",
+          "description": "Flagstones set into neat grass, running from the front door to the gate. Someone has planted small herbs between the cracks."
         }
       ],
       "actors": [],
@@ -288,13 +312,15 @@
           "id": "back_gate",
           "name": "Back Gate",
           "kind": "furniture",
-          "description": "A small wooden gate, worn smooth. It opens quietly on well-oiled hinges."
+          "short_desc": "A small wooden gate, worn smooth, well-oiled hinges",
+          "description": "A small wooden gate, worn smooth. It opens quietly on well-oiled hinges. Beyond it, the trees begin."
         },
         {
           "id": "veggie_patch",
           "name": "Vegetable Patch",
           "kind": "furniture",
-          "description": "Raised beds with tomatoes, herbs, and something leafy you don't recognise."
+          "short_desc": "Raised beds with tomatoes, herbs, and leafy unknowns",
+          "description": "Raised beds with tomatoes, herbs, and something leafy you don't recognise. It smells of earth and growing things."
         }
       ],
       "actors": [],
@@ -309,7 +335,7 @@
       "id": "front_woods",
       "name": "Wooded Path",
       "area": "Outside",
-      "description": "A narrow path winds between tall trees. Roots cross the ground, light filters green through the canopy. The path loops around the property \u00e2\u20ac\u201d you can hear the back of the house through the trees ahead.",
+      "description": "A narrow path winds between tall trees. Roots cross the ground, light filters green through the canopy. The path loops around the property — the back of the house is audible through the trees ahead.",
       "exits": {
         "back": "front_yard",
         "forward": "back_woods"
@@ -319,7 +345,8 @@
           "id": "old_oak",
           "name": "Old Oak",
           "kind": "furniture",
-          "description": "A very old oak. Its bark is carved with initials too faded to read."
+          "short_desc": "A very old oak with initials carved in bark",
+          "description": "A very old oak. Its bark is carved with initials too faded to read. The tree doesn't mind."
         }
       ],
       "actors": [],
@@ -344,7 +371,8 @@
           "id": "mossy_rock",
           "name": "Mossy Rock",
           "kind": "furniture",
-          "description": "A large flat rock covered in soft moss. Someone has left a coffee cup on it."
+          "short_desc": "A large flat rock covered in soft moss with a coffee cup",
+          "description": "A large flat rock covered in soft moss. Someone has left a coffee cup on it. The cup is cold. It has been here a while."
         }
       ],
       "actors": [],

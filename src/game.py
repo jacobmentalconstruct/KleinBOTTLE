@@ -43,6 +43,36 @@ class GameView:
     inventory: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ObjectInfo:
+    id: str
+    name: str
+    short_desc: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class ActorInfo:
+    id: str
+    name: str
+    short_desc: str
+
+
+@dataclass(frozen=True)
+class RoomSnapshot:
+    room_id: str | None
+    room_name: str
+    area: str
+    description: str
+    environment: tuple[tuple[str, str], ...]
+    objects: tuple[ObjectInfo, ...]
+    actors: tuple[ActorInfo, ...]
+    exits: tuple[str, ...]
+    has_terminal: bool
+    has_cat: bool
+    has_ringing_phone: bool
+
+
 def _name(value: dict) -> str:
     return str(value.get("name") or value.get("id") or "Unnamed").strip()
 
@@ -310,6 +340,50 @@ class GameSession:
             return "There's nothing here worth petting."
         bucket = _CAT_PURRS if random.random() < 0.5 else _CAT_MEOWS
         return random.choice(bucket)
+
+    def room_snapshot(self) -> RoomSnapshot:
+        room = self._room()
+        if room is None:
+            return RoomSnapshot(
+                room_id=None, room_name="No Room", area="", description="",
+                environment=(), objects=(), actors=(), exits=(),
+                has_terminal=False, has_cat=False, has_ringing_phone=False,
+            )
+        visible_objects = [o for o in room.get("objects", []) if not o.get("hidden", False)]
+        visible_actors  = [a for a in room.get("actors", [])  if not a.get("hidden", False)]
+        env = tuple(
+            (k.capitalize(), str(v))
+            for k, v in room.get("environment", {}).items() if v
+        )
+        objects = tuple(ObjectInfo(
+            id=str(o.get("id", "")),
+            name=_name(o),
+            short_desc=str(o.get("short_desc") or ""),
+            kind=str(o.get("kind", "")),
+        ) for o in visible_objects)
+        actors = tuple(ActorInfo(
+            id=str(a.get("id", "")),
+            name=_name(a),
+            short_desc=str(a.get("short_desc") or a.get("description") or ""),
+        ) for a in visible_actors)
+        kinds = {o.kind.casefold() for o in objects}
+        has_ringing = any(
+            str(o.get("kind", "")).casefold() == "telephone" and o.get("ringing")
+            for o in visible_objects
+        )
+        return RoomSnapshot(
+            room_id=self.room_id,
+            room_name=room["name"],
+            area=room.get("area", ""),
+            description=room.get("description", ""),
+            environment=env,
+            objects=objects,
+            actors=actors,
+            exits=tuple(room.get("exits", {}).keys()),
+            has_terminal="terminal" in kinds,
+            has_cat="cat" in kinds,
+            has_ringing_phone=has_ringing,
+        )
 
     def consume_computer_request(self) -> dict | None:
         """Return one pending UI action, at most once."""

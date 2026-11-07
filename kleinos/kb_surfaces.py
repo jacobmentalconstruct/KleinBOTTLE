@@ -124,18 +124,10 @@ class KleinBuilderPane(tk.Frame):
 
 # ── KleinAdventurePane ────────────────────────────────────────────────
 
-_BTN_ROW_BG  = "#010a01"
-_BTN_FG      = "#005500"
-_BTN_FG_ON   = "#00cc33"
-_BTN_ACT_BG  = "#001a00"
-_BTN_FONT    = ("Consolas", 9)
-
-
 class KleinAdventurePane(tk.Frame):
     """
     Hosts GameSurface inside a green-themed tk.Frame.
-    Left panel: RoomImagePanel (320 px, generated per room).
-    Right panel: GameSurface (fills remaining space).
+    Injects a RoomImagePanel above the scrollable content sections.
     world_path defaults to KleinBOTTLE/data/world.json.
     """
 
@@ -150,7 +142,6 @@ class KleinAdventurePane(tk.Frame):
         self._on_exit = on_exit
         self._session = None
         self._surface = None
-        self._computer_cb: Optional[Callable] = None
         self._last_room_id: Optional[str] = None
         try:
             _apply_theme(self)
@@ -164,80 +155,30 @@ class KleinAdventurePane(tk.Frame):
             surface.pack(fill="both", expand=True)
             self._surface = surface
 
-            # Inject room image panel and action buttons into the left column
-            # of GameSurface's internal PanedWindow, before the transcript.
-            # This makes the image match the play-panel width and lets the
-            # navigation sidebar run full height from the top.
-            left = surface._main_col       # type: ignore[attr-defined]
-            anchor = surface._story_frame  # type: ignore[attr-defined]
+            # Inject room image panel into the left column, above the
+            # scrollable sections (_story_frame).
+            left   = surface._main_col       # type: ignore[attr-defined]
+            anchor = surface._story_frame    # type: ignore[attr-defined]
 
             self._room_panel = RoomImagePanel(left)
             self._room_panel.pack(fill="x", before=anchor)
-
-            self._btn_row = tk.Frame(left, bg=_BTN_ROW_BG)
-            self._btn_row.pack(fill="x", padx=4, pady=(0, 2), before=anchor)
-
-            self._btn_power = tk.Button(
-                self._btn_row, text="[ ⏻ Power ]",
-                bg=_BTN_ROW_BG, fg=_BTN_FG,
-                activebackground=_BTN_ACT_BG, activeforeground=_BTN_FG_ON,
-                relief="flat", font=_BTN_FONT,
-                command=self._toggle_computer,
-            )
-            self._btn_pet = tk.Button(
-                self._btn_row, text="[ Pet ]",
-                bg=_BTN_ROW_BG, fg=_BTN_FG,
-                activebackground=_BTN_ACT_BG, activeforeground=_BTN_FG_ON,
-                relief="flat", font=_BTN_FONT,
-                command=self._pet_cat,
-            )
-            self._has_terminal = False
-            self._has_cat      = False
 
             self._poll_room()
         except Exception as exc:
             self._error(str(exc))
 
     def set_computer_callback(self, cb: Callable) -> None:
-        self._computer_cb = cb
-
-    def _toggle_computer(self) -> None:
-        if self._computer_cb:
-            self._computer_cb()
-        elif self._surface is not None:
-            self._surface.run("use computer")
-
-    def _pet_cat(self) -> None:
+        """Delegate computer-open callback to the hosted GameSurface."""
         if self._surface is not None:
-            self._surface.run("pet cat")
-
-    def _update_btn_row(self, room: dict) -> None:
-        kinds = {str(o.get("kind", "")).casefold()
-                 for o in room.get("objects", [])
-                 if not o.get("hidden", False)}
-        has_terminal = "terminal" in kinds
-        has_cat      = "cat" in kinds
-
-        if has_terminal != self._has_terminal:
-            self._has_terminal = has_terminal
-            if has_terminal:
-                self._btn_power.pack(side="left", padx=(0, 4))
-            else:
-                self._btn_power.pack_forget()
-
-        if has_cat != self._has_cat:
-            self._has_cat = has_cat
-            if has_cat:
-                self._btn_pet.pack(side="left", padx=(0, 4))
-            else:
-                self._btn_pet.pack_forget()
+            self._surface.set_computer_callback(cb)  # type: ignore[attr-defined]
 
     def _poll_room(self) -> None:
+        """Update the room image panel whenever the player moves to a new room."""
         try:
             s = self._session
             if s is not None:
                 rid = s.room_id
-                if rid != self._last_room_id:
+                if rid is not None and rid != self._last_room_id:
                     self._last_room_id = rid
                     room = next(
                         (r for r in s.world["rooms"] if r["id"] == rid), None
@@ -249,7 +190,6 @@ class KleinAdventurePane(tk.Frame):
                             room["description"],
                             room.get("area", ""),
                         )
-                        self._update_btn_row(room)
         except Exception:
             pass
         self.after(400, self._poll_room)

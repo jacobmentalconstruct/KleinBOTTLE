@@ -22,6 +22,10 @@ _PC_SIZES = {
 _DEFAULTS: dict = {
     "palette": "green",
     "pc_size": "medium",
+    "image_pipeline": {
+        "path": r"C:\Jacob\Apps & Tools\image-generation-pipeline",
+        "github_url": "",
+    },
     "audio": {
         "enabled": True,
         "sounds": {
