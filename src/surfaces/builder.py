@@ -512,6 +512,12 @@ class BuilderSurface(ttk.Frame):
 
     # ── Tree context menu ─────────────────────────────────────────────
 
+    _DIRECTIONS = [
+        "north", "south", "east", "west",
+        "up", "down", "in", "out",
+        "northeast", "northwest", "southeast", "southwest",
+    ]
+
     def _show_tree_menu(self, event: tk.Event) -> None:
         item = self.tree.identify_row(event.y)
         if not item or not item.startswith("room:"):
@@ -525,14 +531,62 @@ class BuilderSurface(ttk.Frame):
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(
             label=f"Add room off \"{name}\"",
-            command=lambda: self._add_room_off(room_id, room),
+            command=lambda: self._pick_exit_direction(room_id, room),
         )
         menu.add_separator()
         menu.add_command(label="Delete room", command=self.delete_room)
         menu.tk_popup(event.x_root, event.y_root)
 
-    def _add_room_off(self, parent_id: str, parent_room: dict) -> None:
-        """Blank the form for a new room pre-wired back to parent_id."""
+    def _pick_exit_direction(self, parent_id: str, parent_room: dict) -> None:
+        """Show a direction picker dialog, then blank the form for a new connected room."""
+        taken     = set(parent_room.get("exits", {}).keys())
+        available = [d for d in self._DIRECTIONS if d not in taken]
+        name      = parent_room.get("name", parent_id)
+
+        window = tk.Toplevel(self)
+        from src.ui_theme import style_dialog  # noqa: PLC0415
+        style_dialog(window)
+        window.title(f"Add room off: {name}")
+        window.resizable(False, False)
+        window.transient(self.winfo_toplevel())
+        window.grab_set()
+
+        ttk.Label(window, text=f"Exit direction from new room back to \"{name}\":").pack(
+            anchor="w", padx=12, pady=(12, 4))
+
+        if taken:
+            ttk.Label(window, text=f"Already used: {', '.join(sorted(taken))}",
+                      style="Muted.TLabel").pack(anchor="w", padx=12, pady=(0, 6))
+
+        chosen = tk.StringVar(value=available[0] if available else "")
+
+        grid = ttk.Frame(window)
+        grid.pack(padx=12, pady=4)
+        for i, d in enumerate(available):
+            ttk.Radiobutton(grid, text=d, variable=chosen,
+                            value=d).grid(row=i // 4, column=i % 4,
+                                          sticky="w", padx=8, pady=2)
+
+        ttk.Separator(window, orient="horizontal").pack(fill="x", padx=12, pady=(10, 4))
+        ttk.Label(window, text="Custom direction:").pack(anchor="w", padx=12)
+        custom_var = tk.StringVar()
+        custom_entry = ttk.Entry(window, textvariable=custom_var, width=24)
+        custom_entry.pack(anchor="w", padx=12, pady=(2, 8))
+
+        def _apply() -> None:
+            direction = custom_var.get().strip() or chosen.get().strip()
+            if not direction:
+                return
+            window.destroy()
+            self._add_room_off(parent_id, parent_room, direction)
+
+        ttk.Button(window, text="Create Room", style="Accent.TButton",
+                   command=_apply).pack(anchor="e", padx=12, pady=(0, 12))
+        window.bind("<Return>", lambda _: _apply())
+        window.bind("<Escape>", lambda _: window.destroy())
+
+    def _add_room_off(self, parent_id: str, parent_room: dict, direction: str) -> None:
+        """Blank the form for a new room pre-wired back to parent_id via direction."""
         if not self._guard_unsaved():
             return
         self.selected_id = None
@@ -544,11 +598,11 @@ class BuilderSurface(ttk.Frame):
             "id": "", "name": "", "area": area, "description": "",
             "exits": {}, "environment": {}, "objects": [],
         }, existing=False)
-        self._set_text(self.exits, f"direction:{parent_id}")
+        self._set_text(self.exits, f"{direction}:{parent_id}")
         self._saved_signature = self._form_signature()
         parent_name = parent_room.get("name", parent_id)
         self.status.set(
-            f"New room — type an ID, replace 'direction' with the exit back to '{parent_name}'"
+            f"New room — type an ID above; exit '{direction}' leads back to '{parent_name}'"
         )
         self.id_entry.focus_set()
         if self.on_room_changed:
