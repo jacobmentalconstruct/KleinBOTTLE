@@ -152,16 +152,21 @@ class TitleScreen(tk.Canvas):
 def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
     """Replace GameSurface._open_computer to swap view to embedded KleinPC."""
     _pc_frame: list[tk.Frame] = []
+    _orig_geo: list[str] = []
 
     def close_pc() -> None:
         if _pc_frame:
             _pc_frame[0].destroy()
             _pc_frame.clear()
+        if _orig_geo:
+            root.resizable(True, True)
+            root.geometry(_orig_geo.pop())
         pane.pack(fill="both", expand=True)
 
     def open_kleinpc() -> None:
         if _pc_frame:
             return  # already open
+        _orig_geo.append(root.geometry())
         pane.pack_forget()
         frame = tk.Frame(root, bg=_BG)
         frame.pack(fill="both", expand=True)
@@ -174,6 +179,15 @@ def _patch_pc(pane: KleinAdventurePane, root: tk.Tk) -> None:
             games=[MAHisLAND(), TheShack(), TextAdventure(), SpaceInvaders()],
             title="KleinBOTTLE PC",
         )
+        # Resize root to wrap the monitor snugly after it renders
+        def _fit_window() -> None:
+            root.update_idletasks()
+            w = frame.winfo_reqwidth()
+            h = frame.winfo_reqheight()
+            if w > 1 and h > 1:
+                root.geometry(f"{w}x{h}")
+                root.resizable(False, False)
+        root.after(80, _fit_window)
 
     pane.set_computer_callback(open_kleinpc)
     for child in pane.winfo_children():
