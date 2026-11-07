@@ -7,6 +7,8 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from typing import Callable, Optional
+
 from ..world_builder import WorldBuilder
 from ..world_model import ID_PATTERN, WorldValidationError, pretty
 from ..ui_theme import FONT_UI, style_dialog, style_text
@@ -24,6 +26,7 @@ class BuilderSurface(ttk.Frame):
                      ("id", "name", "area", "weather", "light", "sound")}
         self.world_name = tk.StringVar(value=builder.world["name"])
         self.start_room = tk.StringVar(value=builder.world["start_room"] or "")
+        self.on_room_changed: Optional[Callable] = None
         # A surface is hosted by the application shell (Notebook); do not pack it here.
         self._build()
         self.refresh_tree()
@@ -165,6 +168,8 @@ class BuilderSurface(ttk.Frame):
             return
         self.selected_id = new_id
         self._populate(self.builder.room(new_id), existing=True)
+        if self.on_room_changed:
+            self.on_room_changed()
 
     def new_room(self, ask: bool = True) -> None:
         if ask and not self._guard_unsaved():
@@ -432,6 +437,53 @@ class BuilderSurface(ttk.Frame):
         actions.pack(fill="x", padx=10, pady=10)
         ttk.Button(actions, text="Load JSON File...", command=load_file).pack(side="left")
         ttk.Button(actions, text="Import", style="Accent.TButton", command=apply).pack(side="right")
+
+    # ── Task 4: AI assistant hooks ────────────────────────────────────
+
+    def get_form_snapshot(self) -> dict:
+        """Return current form values (may be unsaved)."""
+        return {
+            "id":          self.vars["id"].get(),
+            "name":        self.vars["name"].get(),
+            "area":        self.vars["area"].get(),
+            "description": self.description.get("1.0", "end-1c"),
+            "exits":       self.exits.get("1.0", "end-1c"),
+            "environment": {
+                "weather": self.vars["weather"].get(),
+                "light":   self.vars["light"].get(),
+                "sound":   self.vars["sound"].get(),
+            },
+            "objects": self.objects.get("1.0", "end-1c"),
+        }
+
+    def apply_ai_updates(self, updates: dict) -> None:
+        """Apply a partial update dict from the AI assistant to the live form."""
+        allowed = {"name", "description", "environment", "objects"}
+        changed = False
+        for key, value in updates.items():
+            if key not in allowed:
+                continue
+            if key == "name":
+                self.vars["name"].set(str(value))
+                changed = True
+            elif key == "description":
+                self._set_text(self.description, str(value))
+                changed = True
+            elif key == "environment" and isinstance(value, dict):
+                for sub in ("weather", "light", "sound"):
+                    if sub in value:
+                        self.vars[sub].set(str(value[sub]))
+                        changed = True
+            elif key == "objects" and isinstance(value, list):
+                self._set_text(self.objects, pretty(value).rstrip("\n"))
+                changed = True
+        if changed:
+            self.status.set("AI updated form. Click Save Room to persist.")
+
+    def area_rooms(self) -> list:
+        """Return all rooms in the same area as the currently selected room."""
+        area = self.vars["area"].get()
+        return [r for r in self.builder.rooms() if r.get("area") == area]
 
     def export_world(self) -> None:
         path = filedialog.asksaveasfilename(parent=self, defaultextension=".json", filetypes=[("JSON", "*.json")],
