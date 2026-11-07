@@ -326,7 +326,12 @@ class TheShack(KleinGame):
             "  ║   Something is hidden beneath it.    ║\n"
             "  ╚══════════════════════════════════════╝\n"
             "\n"
-            "  Press ENTER to begin.\n"
         )
-        pane.after(80, lambda: pane.write(_TITLE))
+
+        def _auto_start() -> None:
+            pane.write(_TITLE)
+            opening = executor("")
+            pane.write(opening + "\n")
+
+        pane.after(80, _auto_start)
         return pane
