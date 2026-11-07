@@ -45,9 +45,9 @@ _FG        = "#00cc33"
 _DIM       = "#005500"
 _CANVAS_BG = "#000000"
 
-_IMG_ASPECT  = 240 / 320   # 4:3 — height = width × this
-_IMG_MAX_H   = 280         # hard ceiling (pixels)
-_IMG_COL_PCT = 0.35        # never taller than this fraction of the containing column
+_IMG_ASPECT = 240 / 320   # 4:3 — height = width × this
+_IMG_MAX_H  = 260         # hard ceiling — cmd/quick are bottom-packed so this just
+                          # controls how much of the transcript is visible
 
 
 def _build_room_prompt(room_name: str, description: str, area: str = "") -> str:
@@ -121,8 +121,6 @@ class RoomImagePanel(tk.Frame):
         )
         self._canvas.pack(fill="x", padx=4, pady=(0, 4))
         self._canvas.bind("<Configure>", self._on_resize)
-        # Also fire when the panel frame itself is resized (height changes)
-        self.bind("<Configure>", self._on_resize)
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -145,16 +143,13 @@ class RoomImagePanel(tk.Frame):
     # ── Resize ────────────────────────────────────────────────────────
 
     def _canvas_h(self) -> int:
-        """Desired canvas height: 4:3 of width, capped by parent column height and hard ceiling.
+        """Desired canvas height: 4:3 of width, capped at _IMG_MAX_H.
 
-        Uses self.master (the containing column frame) rather than the toplevel window
-        so the cap is relative to the space actually available for this panel.
-        Falls back to 180px if the column hasn't been laid out yet.
+        cmd/quick are bottom-packed in GameSurface so they are always visible
+        regardless of this height; the transcript fills whatever is in between.
         """
         w = self._canvas.winfo_width() or 320
-        col_h = self.master.winfo_height() if self.master else 0  # type: ignore[union-attr]
-        col_cap = int(col_h * _IMG_COL_PCT) if col_h > 100 else 180
-        return min(int(w * _IMG_ASPECT), _IMG_MAX_H, max(80, col_cap))
+        return min(int(w * _IMG_ASPECT), _IMG_MAX_H)
 
     def _on_resize(self, _=None) -> None:
         new_h = self._canvas_h()

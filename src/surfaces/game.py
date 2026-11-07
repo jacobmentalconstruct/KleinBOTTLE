@@ -53,17 +53,19 @@ class GameSurface(ttk.Frame):
         self.transcript.configure(yscrollcommand=scrollbar.set)
         self.transcript.tag_configure("command", foreground=ACCENT, spacing1=10)
         self.transcript.tag_configure("title", font=FONT_HEADING)
+        # Pack controls at the BOTTOM first so they are always visible
+        # regardless of how tall the room image above the transcript grows.
+        quick = ttk.Frame(main)
+        quick.pack(side="bottom", fill="x", pady=(8, 0))
+        for caption, command in (("Look", "look"), ("Inventory", "inventory"), ("Help", "help")):
+            ttk.Button(quick, text=caption, command=lambda c=command: self.run(c)).pack(side="left", padx=(0, 6))
         cmd_row = ttk.Frame(main)
-        cmd_row.pack(fill="x", pady=(10, 0))
+        cmd_row.pack(side="bottom", fill="x", pady=(10, 0))
         ttk.Label(cmd_row, text="Command:").pack(side="left", padx=(0, 5))
         self.entry = ttk.Entry(cmd_row, textvariable=self.command)
         self.entry.pack(side="left", fill="x", expand=True)
         self.entry.bind("<Return>", self._submit)
         ttk.Button(cmd_row, text="Run", style="Accent.TButton", command=self._submit).pack(side="left", padx=(5, 0))
-        quick = ttk.Frame(main)
-        quick.pack(fill="x", pady=(8, 0))
-        for caption, command in (("Look", "look"), ("Inventory", "inventory"), ("Help", "help")):
-            ttk.Button(quick, text=caption, command=lambda c=command: self.run(c)).pack(side="left", padx=(0, 6))
 
         ttk.Label(sidebar, text="Location", style="Heading.TLabel").pack(anchor="w")
         ttk.Label(sidebar, textvariable=self.location, wraplength=195, justify="left").pack(anchor="w", pady=(4, 16))
