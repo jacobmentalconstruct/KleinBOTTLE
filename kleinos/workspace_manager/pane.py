@@ -18,6 +18,35 @@ from kleinos.workspace_manager.session_bridge import (
 _PROJECTIONS = ("tree", "filedump", "combined", "manifest")
 
 
+# ── Tooltip ────────────────────────────────────────────────────────────
+
+def _tip(widget: tk.Widget, text: str) -> None:
+    """Attach a simple hover tooltip to a widget."""
+    from kleinos.palette import HEAD, FG_ON as _FG_ON
+
+    win: list[tk.Toplevel] = []
+
+    def show(event: tk.Event) -> None:
+        if win:
+            return
+        t = tk.Toplevel(widget)
+        t.wm_overrideredirect(True)
+        t.wm_geometry(f"+{event.x_root + 14}+{event.y_root - 2}")
+        t.wm_attributes("-topmost", True)
+        tk.Label(t, text=text, bg=HEAD, fg=_FG_ON,
+                 font=("Consolas", 8), relief="flat", padx=8, pady=4,
+                 wraplength=240, justify="left").pack()
+        win.append(t)
+
+    def hide(_: tk.Event) -> None:
+        if win:
+            win[0].destroy()
+            win.clear()
+
+    widget.bind("<Enter>", show, add=True)
+    widget.bind("<Leave>", hide, add=True)
+
+
 class ProjectContextPane(tk.Frame):
     """KleinOS pane that opens a project folder and calls ProjectMapper actions."""
 
@@ -62,6 +91,7 @@ class ProjectContextPane(tk.Frame):
             command=self._browse,
         )
         self._browse_btn.pack(side="left")
+        _tip(self._browse_btn, "Open folder picker")
 
         self._open_btn = tk.Button(
             top, text="Open",
@@ -70,6 +100,7 @@ class ProjectContextPane(tk.Frame):
             command=self._on_folder_confirm,
         )
         self._open_btn.pack(side="left", padx=(4, 0))
+        _tip(self._open_btn, "Open the selected folder (or press Enter in the path field)")
 
         tk.Frame(self, bg=SEP, height=1).pack(fill="x")
 
@@ -93,6 +124,7 @@ class ProjectContextPane(tk.Frame):
             command=lambda: self._run_action("scan"),
         )
         self._scan_btn.pack(side="left", padx=(0, 4))
+        _tip(self._scan_btn, "Scan the project tree and list all tracked files")
 
         self._compile_btn = tk.Button(
             self._action_frame, text="Compile",
@@ -101,6 +133,7 @@ class ProjectContextPane(tk.Frame):
             command=lambda: self._run_action("compile"),
         )
         self._compile_btn.pack(side="left", padx=(0, 4))
+        _tip(self._compile_btn, "Compile a SQLite snapshot of the current project state")
 
         self._proj_var = tk.StringVar(value="combined")
         proj_menu = tk.OptionMenu(self._action_frame, self._proj_var, *_PROJECTIONS)
@@ -114,6 +147,7 @@ class ProjectContextPane(tk.Frame):
             font=("Consolas", 9),
         )
         proj_menu.pack(side="left")
+        _tip(proj_menu, "Export format: tree (paths only) · filedump (file contents) · combined (tree + files) · manifest (metadata)")
 
         self._export_btn = tk.Button(
             self._action_frame, text="Export",
@@ -122,6 +156,7 @@ class ProjectContextPane(tk.Frame):
             command=lambda: self._run_action("export"),
         )
         self._export_btn.pack(side="left", padx=(4, 0))
+        _tip(self._export_btn, "Export the snapshot in the selected projection format")
 
         # ── Install strip (shown when folder set but no sidecar) ──
         self._install_frame = tk.Frame(self, bg=BG, pady=4)
@@ -140,6 +175,7 @@ class ProjectContextPane(tk.Frame):
             command=self._install,
         )
         self._install_btn.pack(side="left")
+        _tip(self._install_btn, "Clone .project-mapper and pip-install it into this folder")
 
         tk.Frame(self, bg=SEP, height=1).pack(fill="x")
 
@@ -184,7 +220,6 @@ class ProjectContextPane(tk.Frame):
             self._folder_var.set(str(root))
             self._status_var.set(f"● {root}")
             self._status_lbl.config(fg=FG_ON)
-            self._action_frame.pack(fill="x", padx=8, before=self._status_lbl.master)
             self._action_frame.pack(fill="x", padx=8)
             self._install_frame.pack_forget()
         elif self._folder_var.get().strip():

@@ -179,10 +179,18 @@ def make_pm_executor(bridge: PMBridge) -> Callable[[str], str]:
         if cmd == "help":
             return (
                 "Built-in commands:\n"
-                "  help          — this list\n"
-                "  echo <text>   — repeat text\n"
-                "  about         — version info\n"
-                "  pm <cmd>      — Project Mapper  (pm help for commands)\n"
+                "  help                      — this list\n"
+                "  echo <text>               — repeat text\n"
+                "  about                     — version info\n"
+                "\n"
+                "Project Mapper  (pm):\n"
+                "  pm root <path>            — open a project folder\n"
+                "  pm root                   — show current root\n"
+                "  pm status                 — show project state\n"
+                "  pm scan                   — scan project tree\n"
+                "  pm compile                — compile SQLite snapshot\n"
+                "  pm export [projection]    — export snapshot\n"
+                "                              tree | filedump | combined | manifest\n"
             )
         if cmd == "echo":
             return rest
