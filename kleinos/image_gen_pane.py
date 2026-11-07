@@ -133,6 +133,10 @@ class ImageGenPane(tk.Frame):
         self._filter_btns: dict[str, tk.Button] = {}
         self._pl_state     = "offline"   # "offline" | "starting" | "online" | "stopping"
         self._poll_after: Optional[str] = None
+        self._ascii_start_ts: float = 0.0
+        self._status_lbl: Optional[tk.Label] = None
+        self._toast_win: Optional[tk.Toplevel] = None  # type: ignore[name-defined]
+        self._toast_after: Optional[str] = None
 
         if not _pipeline_is_configured():
             self._show_setup_gate()
@@ -216,9 +220,10 @@ class ImageGenPane(tk.Frame):
 
         # Status line
         self._status_var = tk.StringVar(value="Waiting for pipeline…")
-        tk.Label(self, textvariable=self._status_var,
-                 bg=_BG, fg=_DIM, font=("Consolas", 8),
-                 anchor="w").pack(fill="x", padx=10, pady=(0, 2))
+        self._status_lbl = tk.Label(self, textvariable=self._status_var,
+                                    bg=_BG, fg=_DIM, font=("Consolas", 8),
+                                    anchor="w")
+        self._status_lbl.pack(fill="x", padx=10, pady=(0, 2))
 
         # Experimental filter bar (Pillow-only)
         if _PILLOW:
@@ -535,7 +540,7 @@ class ImageGenPane(tk.Frame):
 
     def _toggle_filter(self, key: str) -> None:
         if self._orig_img is None:
-            self._status("Generate an image first.")
+            self._status_warn("No image loaded — generate one first.")
             return
         if self._active_filter == key:
             self._reset_filter()
@@ -543,12 +548,17 @@ class ImageGenPane(tk.Frame):
         self._active_filter = key
         self._update_filter_buttons()
         if key == "ascii":
-            self._status("Converting to ASCII… (requires torch)")
+            self._status("ASCII: converting in background…")
+            self._ascii_start_ts = __import__("time").monotonic()
+            self._show_toast(
+                "ASCII: converting in background…\n"
+                "Result will appear in the canvas when done.")
             threading.Thread(
                 target=self._ascii_worker,
                 args=(self._orig_img,),
                 daemon=True,
             ).start()
+            self._ascii_progress_tick()
             return
         try:
             filtered = self._run_filter(self._orig_img, key)
@@ -559,13 +569,22 @@ class ImageGenPane(tk.Frame):
         except Exception as exc:
             self._status(f"Filter error: {exc}")
 
+    def _ascii_progress_tick(self) -> None:
+        """Update status every 2 s while ASCII filter is active."""
+        if self._active_filter != "ascii":
+            return
+        import time
+        elapsed = int(time.monotonic() - getattr(self, "_ascii_start_ts", time.monotonic()))
+        self._status(f"ASCII: converting… {elapsed}s elapsed (may take 60-120 s on CPU)")
+        self.after(2000, self._ascii_progress_tick)
+
     def _ascii_worker(self, orig_img: object) -> None:
         try:
             from kleinos.pipeline_client import convert_available, ensure_on_path
             if not convert_available():
-                self.after(0, lambda: self._status(
-                    "ASCII needs torch+numpy — pip install torch numpy"))
-                self.after(0, self._reset_filter)
+                self.after(0, lambda: self._status_warn(
+                    "ASCII filter needs torch + numpy — run: pip install torch numpy"))
+                # Leave button lit so user sees the click registered; don't auto-reset
                 return
             ensure_on_path()
             from pipeline.convert import to_ascii  # type: ignore[import]
@@ -579,15 +598,28 @@ class ImageGenPane(tk.Frame):
                 cols = max(40, min(120, w // 7))
                 art = to_ascii(tmp_path, width=cols, iterations=150)
             finally:
-                os.unlink(tmp_path)
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
             img = self._ascii_to_image(art)
             self.after(0, lambda i=img: self._render(
                 i, self._canvas.winfo_width(), self._canvas.winfo_height()))
-            self.after(0, lambda: self._status("Filter: ascii"))
+            self.after(0, lambda: self._status("Filter: ascii — done"))
+            self.after(0, lambda: self._show_toast(
+                "✓ ASCII conversion done — image ready.", auto_ms=4000))
+        except ImportError as exc:
+            msg = str(exc)
+            self.after(0, lambda: self._status_warn(f"ASCII import error: {msg}"))
+            self.after(0, lambda m=msg: self._show_toast(
+                f"ASCII error: {m}", auto_ms=5000))
+            self.after(0, self._reset_filter)
         except Exception as exc:
-            msg = str(exc)[:100]
-            self.after(0, lambda: self._status(f"ASCII error: {msg}"))
+            msg = str(exc)[:120]
+            self.after(0, lambda: self._status_warn(f"ASCII error: {msg}"))
+            self.after(0, lambda m=msg: self._show_toast(
+                f"ASCII error: {m}", auto_ms=5000))
             self.after(0, self._reset_filter)
 
     @staticmethod
@@ -612,6 +644,7 @@ class ImageGenPane(tk.Frame):
     def _reset_filter(self) -> None:
         if self._orig_img is None:
             return
+        self._close_toast()
         self._active_filter = None
         self._update_filter_buttons()
         w = self._canvas.winfo_width()
@@ -668,8 +701,66 @@ class ImageGenPane(tk.Frame):
             img = self._orig_img
         self._render(img, w, h)
 
+    # ── Toast notifications ───────────────────────────────────────────
+
+    def _show_toast(self, msg: str, *, auto_ms: int = 0) -> None:
+        """Display a small floating toast anchored to the bottom-right of the app window."""
+        self._close_toast()
+        try:
+            root = self.winfo_toplevel()
+            win = tk.Toplevel(root)
+            win.overrideredirect(True)
+            win.configure(bg=_BG)
+            win.attributes("-topmost", True)  # type: ignore[arg-type]
+
+            tw, th = 320, 56
+            rx = root.winfo_rootx() + root.winfo_width()  - tw - 10
+            ry = root.winfo_rooty() + root.winfo_height() - th - 10
+            win.geometry(f"{tw}x{th}+{rx}+{ry}")
+
+            outer = tk.Frame(win, bg=_BORDER, padx=1, pady=1)
+            outer.pack(fill="both", expand=True)
+            inner = tk.Frame(outer, bg=_BG)
+            inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+            tk.Label(inner, text=msg, bg=_BG, fg=_FG,
+                     font=("Consolas", 8), wraplength=270,
+                     anchor="w", justify="left").pack(
+                side="left", fill="both", expand=True, padx=6, pady=4)
+            tk.Button(inner, text="✕", bg=_BG, fg=_DIM,
+                      activebackground=_HDR_BG, activeforeground=_FG,
+                      relief="flat", font=("Consolas", 8), cursor="hand2",
+                      command=self._close_toast).pack(side="right", padx=4)
+
+            self._toast_win = win
+            if auto_ms > 0:
+                self._toast_after = self.after(auto_ms, self._close_toast)
+        except Exception:
+            pass   # never crash the main flow over a notification
+
+    def _close_toast(self) -> None:
+        if self._toast_after is not None:
+            try:
+                self.after_cancel(self._toast_after)
+            except Exception:
+                pass
+            self._toast_after = None
+        if self._toast_win is not None:
+            try:
+                self._toast_win.destroy()
+            except Exception:
+                pass
+            self._toast_win = None
+
     def _status(self, text: str) -> None:
         self._status_var.set(text)
+        if self._status_lbl is not None:
+            self._status_lbl.configure(fg=_DIM)
+
+    def _status_warn(self, text: str) -> None:
+        self._status_var.set(text)
+        if self._status_lbl is not None:
+            self._status_lbl.configure(fg=_WARN)
 
 
 # ── KleinApp registration ─────────────────────────────────────────────
