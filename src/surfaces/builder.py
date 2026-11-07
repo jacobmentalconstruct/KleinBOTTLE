@@ -615,7 +615,7 @@ class BuilderSurface(ttk.Frame):
         window.transient(self.winfo_toplevel())
         window.grab_set()
 
-        ttk.Label(window, text=f"Exit direction from new room back to \"{name}\":").pack(
+        ttk.Label(window, text=f"Direction from \"{name}\" to the new room:").pack(
             anchor="w", padx=12, pady=(12, 4))
 
         if taken:
@@ -650,10 +650,12 @@ class BuilderSurface(ttk.Frame):
         window.bind("<Escape>", lambda _: window.destroy())
 
     def _add_room_off(self, parent_id: str, parent_room: dict, direction: str) -> None:
-        """Blank the form for a new room pre-wired back to parent_id via direction."""
+        """Blank the form for a new room pre-wired back to parent_id.
+        direction is the FORWARD direction (parent → new room)."""
         if not self._guard_unsaved():
             return
-        self._pending_attach = (parent_id, direction)
+        back_dir = self._OPPOSITE.get(direction, direction)
+        self._pending_attach = (parent_id, back_dir)
         self.selected_id = None
         self._refreshing = True
         self.tree.selection_remove(*self.tree.selection())
@@ -663,11 +665,11 @@ class BuilderSurface(ttk.Frame):
             "id": "", "name": "", "area": area, "description": "",
             "exits": {}, "environment": {}, "objects": [],
         }, existing=False)
-        self._set_text(self.exits, f"{direction}:{parent_id}")
+        self._set_text(self.exits, f"{back_dir}:{parent_id}")
         self._saved_signature = self._form_signature()
         parent_name = parent_room.get("name", parent_id)
         self.status.set(
-            f"New room — type an ID above; exit '{direction}' leads back to '{parent_name}'"
+            f"New room — type an ID above; '{direction}' from '{parent_name}' leads here"
         )
         self.id_entry.focus_set()
         if self.on_room_changed:
