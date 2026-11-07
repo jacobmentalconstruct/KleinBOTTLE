@@ -27,11 +27,13 @@ from kleinos.klein_app import KleinApp
 from kleinos.room_panel import _pipeline_root
 
 try:
-    from PIL import Image as _PilImage, ImageTk as _PilImageTk  # type: ignore[import-untyped]
+    from PIL import Image as _PilImage, ImageEnhance as _PilEnhance  # type: ignore[import-untyped]
+    from PIL import ImageFilter as _PilFilter, ImageOps as _PilOps  # type: ignore[import-untyped]
+    from PIL import ImageTk as _PilImageTk  # type: ignore[import-untyped]
     _NEAREST = getattr(getattr(_PilImage, "Resampling", _PilImage), "NEAREST", 0)
     _PILLOW = True
 except ImportError:
-    _PilImage = _PilImageTk = None  # type: ignore[assignment]
+    _PilImage = _PilImageTk = _PilEnhance = _PilFilter = _PilOps = None  # type: ignore[assignment]
     _NEAREST = 0
     _PILLOW = False
 
@@ -42,8 +44,19 @@ _DIM    = "#005500"
 _HDR_BG = "#001a00"
 _WARN   = "#cc6600"
 
-_OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "generated"
-_STYLES  = ("default", "kleinbottle", "projectmapper")
+_OUT_DIR  = Path(__file__).resolve().parent.parent / "data" / "generated"
+_STYLES   = ("default", "kleinbottle", "projectmapper")
+
+# Experimental filters available in the filter bar.
+# Each entry: (label, internal_key)
+_FILTERS = (
+    ("Phosphor",   "phosphor"),
+    ("Grayscale",  "gray"),
+    ("Sepia",      "sepia"),
+    ("Sharpen",    "sharpen"),
+    ("Edge",       "edge"),
+    ("Invert",     "invert"),
+)
 
 # Lines in ComfyUI stdout that mean the server is ready
 _READY_SIGNALS = (
@@ -96,12 +109,15 @@ class ImageGenPane(tk.Frame):
 
     def __init__(self, parent: tk.Widget, on_exit=None):
         super().__init__(parent, bg=_BG)
-        self._on_exit   = on_exit
+        self._on_exit      = on_exit
         self._photo: Optional[object] = None
-        self._busy      = False
-        self._launching = False
+        self._busy         = False
+        self._launching    = False
         self._proc: Optional[subprocess.Popen] = None  # type: ignore[type-arg]
         self._pending_prompt: Optional[tuple[str, str]] = None
+        self._orig_img: Optional[object] = None   # unfiltered PIL image
+        self._active_filter: Optional[str] = None
+        self._filter_btns: dict[str, tk.Button] = {}
         self._build()
 
     # ── Layout ────────────────────────────────────────────────────────
@@ -148,6 +164,30 @@ class ImageGenPane(tk.Frame):
         tk.Label(self, textvariable=self._status_var,
                  bg=_BG, fg=_DIM, font=("Consolas", 8),
                  anchor="w").pack(fill="x", padx=10, pady=(0, 2))
+
+        # Experimental filter bar (Pillow-only)
+        if _PILLOW:
+            fbar = tk.Frame(self, bg=_BG)
+            fbar.pack(fill="x", padx=8, pady=(0, 2))
+            tk.Label(fbar, text="FILTER", bg=_BG, fg=_DIM,
+                     font=("Consolas", 7)).pack(side="left", padx=(0, 6))
+            for label, key in _FILTERS:
+                btn = tk.Button(
+                    fbar, text=label,
+                    bg=_BG, fg=_DIM,
+                    activebackground=_HDR_BG, activeforeground=_FG,
+                    relief="flat", font=("Consolas", 8), cursor="hand2",
+                    command=lambda k=key: self._toggle_filter(k),
+                )
+                btn.pack(side="left", padx=2)
+                self._filter_btns[key] = btn
+            tk.Button(
+                fbar, text="✕ Reset",
+                bg=_BG, fg=_DIM,
+                activebackground=_HDR_BG, activeforeground=_FG,
+                relief="flat", font=("Consolas", 8), cursor="hand2",
+                command=self._reset_filter,
+            ).pack(side="left", padx=(8, 0))
 
         # Launch log — hidden until pipeline needs starting
         self._log_frame = tk.Frame(self, bg=_BG)
@@ -362,20 +402,102 @@ class ImageGenPane(tk.Frame):
             if w < 2 or h < 2:
                 self.after(50, lambda: self._show(path))
                 return
-            img = _PilImage.open(path)  # type: ignore[union-attr]
-            iw, ih = img.size
-            scale = min(w / iw, h / ih)
-            img = img.resize((int(iw * scale), int(ih * scale)), _NEAREST)  # type: ignore[union-attr]
-            self._photo = _PilImageTk.PhotoImage(img)  # type: ignore[union-attr]
-            self._canvas.delete("all")
-            self._canvas.create_image(w // 2, h // 2, anchor="center", image=self._photo)
+            img = _PilImage.open(path).convert("RGB")  # type: ignore[union-attr]
+            self._orig_img = img.copy()
             self._last_path = path
+            self._active_filter = None
+            self._update_filter_buttons()
+            self._render(img, w, h)
         except Exception as exc:
             self._status(f"Display error: {exc}")
 
+    def _render(self, img: object, w: int, h: int) -> None:
+        iw, ih = img.size  # type: ignore[union-attr]
+        scale = min(w / iw, h / ih)
+        img = img.resize((int(iw * scale), int(ih * scale)), _NEAREST)  # type: ignore[union-attr]
+        self._photo = _PilImageTk.PhotoImage(img)  # type: ignore[union-attr]
+        self._canvas.delete("all")
+        self._canvas.create_image(w // 2, h // 2, anchor="center", image=self._photo)
+
+    # ── Experimental filters ──────────────────────────────────────────
+
+    def _toggle_filter(self, key: str) -> None:
+        if self._orig_img is None:
+            self._status("Generate an image first.")
+            return
+        if self._active_filter == key:
+            self._reset_filter()
+            return
+        self._active_filter = key
+        self._update_filter_buttons()
+        try:
+            filtered = self._run_filter(self._orig_img, key)
+            w = self._canvas.winfo_width()
+            h = self._canvas.winfo_height()
+            self._render(filtered, w, h)
+            self._status(f"Filter: {key}")
+        except Exception as exc:
+            self._status(f"Filter error: {exc}")
+
+    def _reset_filter(self) -> None:
+        if self._orig_img is None:
+            return
+        self._active_filter = None
+        self._update_filter_buttons()
+        w = self._canvas.winfo_width()
+        h = self._canvas.winfo_height()
+        self._render(self._orig_img, w, h)
+        self._status(f"Filter reset.  {getattr(self, '_last_path', Path()).name}")
+
+    def _update_filter_buttons(self) -> None:
+        for key, btn in self._filter_btns.items():
+            if key == self._active_filter:
+                btn.configure(fg=_FG, relief="groove")
+            else:
+                btn.configure(fg=_DIM, relief="flat")
+
+    @staticmethod
+    def _run_filter(img: object, key: str) -> object:  # type: ignore[return]
+        """Apply a named filter to a PIL RGB image; return a new image."""
+        if key == "phosphor":
+            gray = img.convert("L")  # type: ignore[union-attr]
+            # Map luminance into the green phosphor range (#010a01 → #00ff44)
+            r = gray.point(lambda v: int(v * 0.00))
+            g = gray.point(lambda v: int(v * 1.00))
+            b = gray.point(lambda v: int(v * 0.27))
+            return _PilImage.merge("RGB", (r, g, b))  # type: ignore[union-attr]
+        if key == "gray":
+            return img.convert("L").convert("RGB")  # type: ignore[union-attr]
+        if key == "sepia":
+            gray = img.convert("L")  # type: ignore[union-attr]
+            r = gray.point(lambda v: min(255, int(v * 1.08)))
+            g = gray.point(lambda v: int(v * 0.85))
+            b = gray.point(lambda v: int(v * 0.66))
+            return _PilImage.merge("RGB", (r, g, b))  # type: ignore[union-attr]
+        if key == "sharpen":
+            return _PilEnhance.Sharpness(img).enhance(3.0)  # type: ignore[union-attr]
+        if key == "edge":
+            return img.convert("L").filter(  # type: ignore[union-attr]
+                _PilFilter.FIND_EDGES).convert("RGB")  # type: ignore[union-attr]
+        if key == "invert":
+            return _PilOps.invert(img)  # type: ignore[union-attr]
+        return img
+
     def _on_resize(self, _=None) -> None:
-        if hasattr(self, "_last_path") and self._last_path:
-            self._show(self._last_path)
+        if self._orig_img is None:
+            return
+        w = self._canvas.winfo_width()
+        h = self._canvas.winfo_height()
+        if w < 2 or h < 2:
+            return
+        if self._active_filter:
+            try:
+                img = self._run_filter(self._orig_img, self._active_filter)
+            except Exception:
+                img = self._orig_img
+        else:
+            img = self._orig_img
+        self._render(img, w, h)
 
     def _status(self, text: str) -> None:
         self._status_var.set(text)
