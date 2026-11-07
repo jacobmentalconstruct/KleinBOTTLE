@@ -1,0 +1,82 @@
+{
+  "name": "kleinos-stdlib",
+  "version": "0.1.0",
+  "description": "KleinBOTTLE internal capability layer. Provides analysis, introspection, and operations tools that KleinOS apps call into. Apps depend on this; the main KleinBOTTLE app does not.",
+  "entry": "src/mcp_server.py",
+  "tool_contract": "src/common.py",
+  "capabilities": {
+    "ast_analysis": {
+      "tools": [
+        {"id": "duplicate_code_finder",   "path": "src/tools/duplicate_code_finder.py",   "summary": "Exact and structural (locally-renamed) duplicate detection via AST fingerprints."},
+        {"id": "similar_code_finder",     "path": "src/tools/similar_code_finder.py",     "summary": "Structural similarity ranking; near-duplicate detection."},
+        {"id": "dead_code_finder",        "path": "src/tools/dead_code_finder.py",        "summary": "Unused functions, classes, and imports via cross-file reference analysis."},
+        {"id": "python_complexity_scorer","path": "src/tools/python_complexity_scorer.py","summary": "Cyclomatic complexity + nesting + length composite score per function."},
+        {"id": "import_graph_mapper",     "path": "src/tools/import_graph_mapper.py",     "summary": "Full import dependency graph with circular chain detection."},
+        {"id": "scan_blocking_calls",     "path": "src/tools/scan_blocking_calls.py",     "summary": "Finds UI-blocking calls (subprocess, sleep, requests, socket, etc.)."},
+        {"id": "domain_boundary_audit",   "path": "src/tools/domain_boundary_audit.py",   "summary": "Flags domain boundary violations by function/class/file."},
+        {"id": "module_decomp_planner",   "path": "src/tools/module_decomp_planner.py",   "summary": "Plans safe decomposition of large Python modules."},
+        {"id": "tkinter_widget_tree",     "path": "src/tools/tkinter_widget_tree.py",     "summary": "Maps Tkinter widget hierarchy, geometry, and bindings from source."},
+        {"id": "relation_walker",         "path": "src/tools/relation_walker.py",         "summary": "Navigate filesystem, Python code units, or caller-supplied hierarchies."}
+      ]
+    },
+    "introspection": {
+      "tools": [
+        {"id": "file_tree_snapshot",        "path": "src/tools/file_tree_snapshot.py",        "summary": "File tree with sizes, line counts, timestamps, optional docstrings."},
+        {"id": "repo_search",               "path": "src/tools/repo_search.py",               "summary": "Full-text search via ripgrep with Python-native fallback."},
+        {"id": "project_orientation",       "path": "src/tools/project_orientation.py",       "summary": "Single-document orientation: tool inventory + env + constraints."},
+        {"id": "local_agent_bootstrap",     "path": "src/tools/local_agent_bootstrap.py",     "summary": "Launch packet for agents: host + workspace + commands + deps."},
+        {"id": "workspace_boundary_audit",  "path": "src/tools/workspace_boundary_audit.py",  "summary": "Resolves project/sidecar/git roots; reports key operational surfaces."},
+        {"id": "context_bundle_builder",    "path": "src/tools/context_bundle_builder.py",    "summary": "Assembles a single-file adversarial review bundle."},
+        {"id": "workflow_state_report",     "path": "src/tools/workflow_state_report.py",     "summary": "Reads CONTROL.md + STATUS.md + recent journal into structured state."}
+      ]
+    },
+    "environment": {
+      "tools": [
+        {"id": "dependency_env_check",     "path": "src/tools/dependency_env_check.py",     "summary": "Checks venv, lockfiles, requirements, tool availability. Read-only."},
+        {"id": "host_capability_probe",    "path": "src/tools/host_capability_probe.py",    "summary": "Reports OS, Python, shell, and dev command availability. Read-only."},
+        {"id": "process_port_inspector",   "path": "src/tools/process_port_inspector.py",   "summary": "Reports running processes and listening ports. Read-only."},
+        {"id": "project_command_profile",  "path": "src/tools/project_command_profile.py",  "summary": "Discovers declared setup/test/run/build/dev commands from project files."},
+        {"id": "dev_server_manager",       "path": "src/tools/dev_server_manager.py",       "summary": "Guarded dev-server lifecycle: start/stop/status/logs."},
+        {"id": "runtime_artifact_cleaner", "path": "src/tools/runtime_artifact_cleaner.py", "summary": "Dry-run-first cleanup of generated artifacts. Confirm required."},
+        {"id": "secret_surface_audit",     "path": "src/tools/secret_surface_audit.py",     "summary": "Scans for committed secrets and risky env exposure. Read-only."},
+        {"id": "docker_ops",               "path": "src/tools/docker_ops.py",               "summary": "Guarded Docker: build, smoke-run, logs. Push gated behind confirmation."},
+        {"id": "k8s_ops",                  "path": "src/tools/k8s_ops.py",                  "summary": "Guarded kubectl: dry-run/apply/status/logs. Mutation gated."}
+      ]
+    },
+    "sqlite": {
+      "tools": [
+        {"id": "sqlite_schema_inspector", "path": "src/tools/sqlite_schema_inspector.py", "summary": "Schema introspection: tables, columns, types, PKs, indexes, row counts."},
+        {"id": "schema_diff_tool",        "path": "src/tools/schema_diff_tool.py",        "summary": "Diffs two SQLite schemas: added/dropped tables, columns, indexes."}
+      ]
+    },
+    "scaffold_test": {
+      "tools": [
+        {"id": "test_scaffold_generator", "path": "src/tools/test_scaffold_generator.py", "summary": "Generates test file skeletons from Python source (AST-extracted public API)."},
+        {"id": "smoke_test_runner",       "path": "src/tools/smoke_test_runner.py",       "summary": "Meta-runner: discovers and runs all smoke_test.py files in the toolbox."},
+        {"id": "tokenizing_patcher",      "path": "src/tools/tokenizing_patcher.py",      "summary": "Whitespace-immune hunk patcher using tokenization."}
+      ]
+    },
+    "journal": {
+      "note": "Journal tools require journal_init to run first. All others are standalone.",
+      "tools": [
+        {"id": "journal_init",        "path": "src/tools/journal_init.py",        "summary": "Bootstrap: creates SQLite DB, project folders, seeds contract."},
+        {"id": "journal_write",       "path": "src/tools/journal_write.py",       "summary": "Create/update/append journal entries with CAS body storage."},
+        {"id": "journal_query",       "path": "src/tools/journal_query.py",       "summary": "Search and filter journal entries or fetch by UID."},
+        {"id": "journal_export",      "path": "src/tools/journal_export.py",      "summary": "Export filtered entries to Markdown or JSON files."},
+        {"id": "journal_actions",     "path": "src/tools/journal_actions.py",     "summary": "Query the shared human/AI action ledger."},
+        {"id": "journal_manifest",    "path": "src/tools/journal_manifest.py",    "summary": "Returns package manifest, DB manifest, schema summary, migration history."},
+        {"id": "journal_scaffold",    "path": "src/tools/journal_scaffold.py",    "summary": "Unpacks standard project layout templates from DB to disk."},
+        {"id": "journal_pack",        "path": "src/tools/journal_pack.py",        "summary": "Pack/unpack tool source code into/from the DB."},
+        {"id": "journal_snapshot",    "path": "src/tools/journal_snapshot.py",    "summary": "Create, list, inspect, and verify merkle snapshots."},
+        {"id": "journal_acknowledge", "path": "src/tools/journal_acknowledge.py", "summary": "Record contract acknowledgment by agent or human."}
+      ]
+    }
+  },
+  "apps": [],
+  "tool_contract": {
+    "interface": "run(arguments: dict) -> dict",
+    "cli": "python <tool.py> run --input-json '{...}'",
+    "metadata": "python <tool.py> metadata",
+    "result_envelope": "src/common.py"
+  }
+}
